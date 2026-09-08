@@ -10,6 +10,7 @@ import Badge from '../components/Badge'
 import { toast } from 'sonner'
 import { Trash2, ChevronUp, ChevronDown } from 'lucide-react'
 import ConfirmModal from '../components/ConfirmModal'
+import MovieSearchSelect from '../components/MovieSearchSelect'
 
 export default function BannerManager() {
   const [banners, setBanners] = useState<Banner[]>([])
@@ -129,11 +130,7 @@ export default function BannerManager() {
           {clickable && (
             <div className="space-y-1.5">
               <Label>Linked Movie</Label>
-              <select value={linkedMovieId} onChange={e => setLinkedMovieId(e.target.value)}
-                className="w-full h-10 rounded-lg border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <option value="">Select movie</option>
-                {movies.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
-              </select>
+              <MovieSearchSelect movies={movies} value={linkedMovieId} onChange={setLinkedMovieId} placeholder="Search and select a movie" />
             </div>
           )}
         </div>

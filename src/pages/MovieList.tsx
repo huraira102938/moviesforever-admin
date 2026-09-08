@@ -17,6 +17,9 @@ export default function MovieList() {
   const [genres, setGenres] = useState<Genre[]>([])
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [filterFree, setFilterFree] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterGenre, setFilterGenre] = useState('')
   const [loading, setLoading] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<Movie | null>(null)
 
@@ -69,7 +72,10 @@ export default function MovieList() {
   const filtered = movies.filter(m => {
     const matchSearch = !search || m.title.toLowerCase().includes(search.toLowerCase())
     const matchCat = !filterCategory || m.category === filterCategory
-    return matchSearch && matchCat
+    const matchFree = !filterFree || (filterFree === 'free' ? m.isFree : !m.isFree)
+    const matchStatus = !filterStatus || (filterStatus === 'live' ? !m.paused : m.paused)
+    const matchGenre = !filterGenre || (m.genres || []).includes(filterGenre)
+    return matchSearch && matchCat && matchFree && matchStatus && matchGenre
   })
 
   if (loading) {
@@ -86,8 +92,8 @@ export default function MovieList() {
         <Button onClick={() => navigate('/movies/upload')}>+ Upload Movie</Button>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 max-w-sm min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by title..."
             className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -96,6 +102,23 @@ export default function MovieList() {
           className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
           <option value="">All categories</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select value={filterFree} onChange={e => setFilterFree(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="">Free &amp; paid</option>
+          <option value="free">Free</option>
+          <option value="paid">Paid</option>
+        </select>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="">Live &amp; paused</option>
+          <option value="live">Live</option>
+          <option value="paused">Paused</option>
+        </select>
+        <select value={filterGenre} onChange={e => setFilterGenre(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="">All genres</option>
+          {genres.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
       </div>
 
