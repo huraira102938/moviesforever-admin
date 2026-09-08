@@ -49,6 +49,9 @@ export interface AppUser {
   phoneNumber: string
   jazzCashNumber: string
   jazzCashTitle: string
+  paymentMethod?: string
+  paymentNumber?: string
+  accountTitle?: string
   referralCount: number
   referredBy?: string
   createdAt?: string
@@ -68,6 +71,27 @@ export interface PricingSettings {
   referralPrice: number
   referralPayout: number
 }
+
+export interface PaymentTransaction {
+  id: string
+  clientUserId: string
+  clientUsername: string
+  clientRealName: string
+  clientPhoneNumber: string
+  clientJazzCashNumber: string
+  clientJazzCashTitle: string
+  paymentMethod?: string
+  paymentNumber?: string
+  accountTitle?: string
+  totalReceived: number
+  referralUsername?: string
+  referrerPendingAmount: number
+  status: 'pending' | 'paid'
+  createdAt: string
+  paidAt?: string
+}
+
+export const REFERRAL_PAYOUT_OPTIONS = [50, 100, 150, 200] as const
 
 export const SECTIONS = [
   { value: 'recently-added', label: 'Recently Added' },

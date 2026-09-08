@@ -9,6 +9,7 @@ import {
   Users,
   Image as ImageIcon,
   Settings,
+  Share2,
 } from 'lucide-react'
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { to: '/payments', icon: CreditCard, label: 'Payment Verify', group: 'Users & Codes' },
   { to: '/referrals', icon: Users, label: 'Referrals', group: 'Users & Codes' },
   { to: '/users', icon: Users, label: 'User Management', group: 'Users & Codes' },
+  { to: '/app-sharing', icon: Share2, label: 'App Sharing', group: 'Settings' },
   { to: '/pricing', icon: Settings, label: 'Pricing Settings', group: 'Settings' },
 ]
 
