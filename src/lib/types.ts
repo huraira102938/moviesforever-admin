@@ -71,6 +71,12 @@ export interface Banner {
   order: number
 }
 
+export interface TrendingItem {
+  id: string
+  movieId: string
+  order: number
+}
+
 export interface PricingSettings {
   standardPrice: number
   referralPrice: number

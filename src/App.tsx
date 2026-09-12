@@ -15,6 +15,7 @@ import PricingSettings from './pages/PricingSettings'
 import PaymentDetails from './pages/PaymentDetails'
 import ContactDetails from './pages/ContactDetails'
 import Notifications from './pages/Notifications'
+import Trending from './pages/Trending'
 import AppSharing from './pages/AppSharing'
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
           <Route path="payment-details" element={<PaymentDetails />} />
           <Route path="contact-details" element={<ContactDetails />} />
           <Route path="notifications" element={<Notifications />} />
+          <Route path="trending" element={<Trending />} />
         </Route>
       </Routes>
     </BrowserRouter>
