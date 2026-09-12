@@ -4,15 +4,19 @@ import { db } from '../lib/firebase'
 import type { AppUser, PaymentTransaction } from '../lib/types'
 import Badge from '../components/Badge'
 import ConfirmModal from '../components/ConfirmModal'
+import PauseModal from '../components/PauseModal'
 import { toast } from 'sonner'
-import { Trash2, Search, ChevronDown, ChevronUp, CheckCircle2, Wallet, CircleDollarSign } from 'lucide-react'
+import { Trash2, Search, ChevronDown, ChevronUp, CheckCircle2, Wallet, CircleDollarSign, Pause, Play } from 'lucide-react'
 
 export default function UserManagement() {
   const [users, setUsers] = useState<AppUser[]>([])
   const [transactions, setTransactions] = useState<PaymentTransaction[]>([])
   const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
   const [loading, setLoading] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null)
+  const [pauseTarget, setPauseTarget] = useState<AppUser | null>(null)
+  const [pauseSaving, setPauseSaving] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
@@ -47,6 +51,43 @@ export default function UserManagement() {
     }
   }
 
+  async function handlePause(userNote: string, adminNote: string) {
+    if (!pauseTarget) return
+    setPauseSaving(true)
+    try {
+      await updateDoc(doc(db, 'users', pauseTarget.id), {
+        paused: true,
+        pauseUserNote: userNote,
+        pauseAdminNote: adminNote,
+        pausedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      setUsers(prev => prev.map(u => u.id === pauseTarget.id ? { ...u, paused: true, pauseUserNote: userNote, pauseAdminNote: adminNote, pausedAt: new Date().toISOString() } : u))
+      toast.success(`User "${pauseTarget.username}" paused`)
+    } catch (err) {
+      toast.error('Failed to pause user')
+    } finally {
+      setPauseSaving(false)
+      setPauseTarget(null)
+    }
+  }
+
+  async function handleResume(user: AppUser) {
+    try {
+      await updateDoc(doc(db, 'users', user.id), {
+        paused: false,
+        pauseUserNote: '',
+        pauseAdminNote: '',
+        pausedAt: '',
+        updatedAt: new Date().toISOString(),
+      })
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, paused: false, pauseUserNote: '', pauseAdminNote: '', pausedAt: '' } : u))
+      toast.success(`User "${user.username}" resumed`)
+    } catch (err) {
+      toast.error('Failed to resume user')
+    }
+  }
+
   async function handleMarkPaid(txn: PaymentTransaction) {
     try {
       await updateDoc(doc(db, 'transactions', txn.id), {
@@ -61,6 +102,8 @@ export default function UserManagement() {
   }
 
   const filtered = users.filter(u => {
+    const matchStatus = !filterStatus || (filterStatus === 'paused' ? u.paused : !u.paused)
+    if (!matchStatus) return false
     if (!search) return true
     const s = search.toLowerCase()
     return u.id.toLowerCase().includes(s) || u.username.toLowerCase().includes(s) || u.realName?.toLowerCase().includes(s) || u.phoneNumber?.includes(s)
@@ -85,10 +128,18 @@ export default function UserManagement() {
         <p className="text-sm text-gray-500 mt-1">{users.length} registered users</p>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by ID, username, name, or phone..."
-          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 max-w-sm min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by ID, username, name, or phone..."
+            className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="">Active &amp; paused</option>
+          <option value="active">Active</option>
+          <option value="paused">Paused</option>
+        </select>
       </div>
 
       <div className="bg-white rounded-xl border overflow-hidden">
@@ -122,6 +173,8 @@ export default function UserManagement() {
                   totalReceived={totalReceived}
                   onToggle={() => setExpanded(prev => ({ ...prev, [user.id]: !prev[user.id] }))}
                   onDelete={() => setDeleteTarget(user)}
+                  onPause={() => setPauseTarget(user)}
+                  onResume={() => handleResume(user)}
                   onMarkPaid={handleMarkPaid}
                 />
               )
@@ -134,12 +187,19 @@ export default function UserManagement() {
       </div>
 
       <ConfirmModal open={Boolean(deleteTarget)} title="Delete User" message={`Delete user "${deleteTarget?.username}" (${deleteTarget?.realName})? This cannot be undone.`} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} confirmLabel="Delete" />
+      <PauseModal
+        open={Boolean(pauseTarget)}
+        username={pauseTarget?.username || ''}
+        saving={pauseSaving}
+        onConfirm={handlePause}
+        onCancel={() => setPauseTarget(null)}
+      />
     </div>
   )
 }
 
 function FragmentRow({
-  user, rTxns, isOpen, totalPending, totalCompleted, totalReceived, onToggle, onDelete, onMarkPaid,
+  user, rTxns, isOpen, totalPending, totalCompleted, totalReceived, onToggle, onDelete, onPause, onResume, onMarkPaid,
 }: {
   user: AppUser
   rTxns: PaymentTransaction[]
@@ -149,16 +209,30 @@ function FragmentRow({
   totalReceived: number
   onToggle: () => void
   onDelete: () => void
+  onPause: () => void
+  onResume: () => void
   onMarkPaid: (txn: PaymentTransaction) => void
 }) {
   return (
     <>
       <tr className={`border-b hover:bg-gray-50 ${isOpen ? 'bg-gray-50' : ''}`}>
         <td className="px-4 py-2.5 font-mono text-xs text-gray-600">{user.id}</td>
-        <td className="px-4 py-2.5 font-medium text-gray-900">{user.username}</td>
+        <td className="px-4 py-2.5 font-medium text-gray-900">
+          <div className="flex items-center gap-2">
+            {user.username}
+            {user.paused && <Badge variant="warning">Paused</Badge>}
+          </div>
+          {user.paused && (
+            <div className="mt-1 space-y-0.5 text-xs">
+              <p className="text-amber-700"><span className="font-medium">User:</span> {user.pauseUserNote}</p>
+              <p className="text-gray-400"><span className="font-medium">Admin:</span> {user.pauseAdminNote}</p>
+            </div>
+          )}
+        </td>
         <td className="px-4 py-2.5 text-gray-700">{user.realName || '—'}</td>
         <td className="px-4 py-2.5 text-gray-600">
           {user.phoneNumber || '—'}
+          {user.subscribedAt ? <div className="text-xs text-gray-400">Subscribed: {new Date(user.subscribedAt).toLocaleString()}</div> : null}
           {user.paymentNumber ? <div className="text-xs text-gray-400">{user.paymentNumber} · {user.accountTitle || ''} · {user.paymentMethod}</div> : null}
         </td>
         <td className="px-4 py-2.5">
@@ -171,6 +245,15 @@ function FragmentRow({
         </td>
         <td className="px-4 py-2.5">
           <div className="flex items-center justify-end gap-1">
+            {user.paused ? (
+              <button onClick={onResume} className="p-1.5 rounded hover:bg-gray-100 text-amber-600 hover:text-amber-700" title="Resume user">
+                <Play className="w-4 h-4" />
+              </button>
+            ) : (
+              <button onClick={onPause} className="p-1.5 rounded hover:bg-gray-100 text-amber-600 hover:text-amber-700" title="Pause user">
+                <Pause className="w-4 h-4" />
+              </button>
+            )}
             {(rTxns.length > 0 || user.referralCount > 0) && (
               <button onClick={onToggle} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-indigo-600" title="View payments">
                 {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}

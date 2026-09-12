@@ -54,6 +54,11 @@ export interface AppUser {
   accountTitle?: string
   referralCount: number
   referredBy?: string
+  paused?: boolean
+  pauseUserNote?: string
+  pauseAdminNote?: string
+  pausedAt?: string
+  subscribedAt?: string
   createdAt?: string
 }
 
@@ -89,6 +94,15 @@ export interface PaymentTransaction {
   status: 'pending' | 'paid'
   createdAt: string
   paidAt?: string
+}
+
+export type NotificationTarget = 'free' | 'paid' | 'paused'
+
+export interface AppNotification {
+  id: string
+  text: string
+  targets: NotificationTarget[]
+  createdAt: string
 }
 
 export const REFERRAL_PAYOUT_OPTIONS = [50, 100, 150, 200] as const

@@ -14,6 +14,7 @@ import BannerManager from './pages/BannerManager'
 import PricingSettings from './pages/PricingSettings'
 import PaymentDetails from './pages/PaymentDetails'
 import ContactDetails from './pages/ContactDetails'
+import Notifications from './pages/Notifications'
 import AppSharing from './pages/AppSharing'
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
           <Route path="pricing" element={<PricingSettings />} />
           <Route path="payment-details" element={<PaymentDetails />} />
           <Route path="contact-details" element={<ContactDetails />} />
+          <Route path="notifications" element={<Notifications />} />
         </Route>
       </Routes>
     </BrowserRouter>

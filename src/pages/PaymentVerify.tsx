@@ -96,6 +96,7 @@ export default function PaymentVerify() {
         jazzCashTitle: paymentMethod === 'jazzcash' ? accountTitle.trim() : '',
         referralCount: 0,
         referredBy: referredBy || null,
+        subscribedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
       })
 
