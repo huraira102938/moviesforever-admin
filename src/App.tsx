@@ -12,6 +12,8 @@ import ReferralTracking from './pages/ReferralTracking'
 import UserManagement from './pages/UserManagement'
 import BannerManager from './pages/BannerManager'
 import PricingSettings from './pages/PricingSettings'
+import PaymentDetails from './pages/PaymentDetails'
+import ContactDetails from './pages/ContactDetails'
 import AppSharing from './pages/AppSharing'
 
 function App() {
@@ -33,6 +35,8 @@ function App() {
           <Route path="banners" element={<BannerManager />} />
           <Route path="app-sharing" element={<AppSharing />} />
           <Route path="pricing" element={<PricingSettings />} />
+          <Route path="payment-details" element={<PaymentDetails />} />
+          <Route path="contact-details" element={<ContactDetails />} />
         </Route>
       </Routes>
     </BrowserRouter>

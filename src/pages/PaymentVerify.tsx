@@ -17,18 +17,10 @@ function generateCodeString(): string {
   return code
 }
 
-function generateUsername(): string {
-  const adj = ['golden', 'silver', 'crimson', 'shadow', 'star', 'royal', 'elegant', 'bold', 'swift', 'fierce']
-  const noun = ['lion', 'tiger', 'eagle', 'panther', 'hawk', 'wolf', 'dragon', 'phoenix', 'cobra', 'falcon']
-  const a = adj[Math.floor(Math.random() * adj.length)]
-  const n = noun[Math.floor(Math.random() * noun.length)]
-  const num = Math.floor(Math.random() * 1000)
-  return `${a}${n}${num}`
-}
-
 export default function PaymentVerify() {
   const [realName, setRealName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
+  const [username, setUsername] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('none')
   const [paymentNumber, setPaymentNumber] = useState('')
   const [accountTitle, setAccountTitle] = useState('')
@@ -43,8 +35,14 @@ export default function PaymentVerify() {
     if (!phoneNumber.trim()) return toast.error('Phone number is required')
     if (!totalReceived || isNaN(Number(totalReceived))) return toast.error('Enter a valid total payment received')
 
+    const chosenUsername = username.trim()
+    if (!chosenUsername) return toast.error('Username is required')
+
     const referralUsed = referralUsername.trim() !== ''
     const pendingAmount = referralUsed ? referrerPendingAmount : 0
+    if (referralUsed && referralUsername.trim().toLowerCase() === chosenUsername.toLowerCase()) {
+      return toast.error('Username cannot be the same as the referral username')
+    }
 
     let referrerId: string | undefined
     if (referralUsed) {
@@ -55,10 +53,21 @@ export default function PaymentVerify() {
       referrerId = referrerSnap.docs[0].id
     }
 
+    const [existingUsers, existingCodes] = await Promise.all([
+      getDocs(collection(db, 'users')),
+      getDocs(collection(db, 'codes')),
+    ])
+    const takenUsernames = new Set([
+      ...existingUsers.docs.map(d => String(d.data().username || '').toLowerCase()),
+      ...existingCodes.docs.map(d => String(d.data().username || '').toLowerCase()),
+    ])
+    if (takenUsernames.has(chosenUsername.toLowerCase())) {
+      return toast.error(`Username "${chosenUsername}" is already taken. Choose a different one.`)
+    }
+
     setSaving(true)
     try {
       const userId = generateCodeString()
-      const username = generateUsername()
 
       let referredBy: string | undefined
       if (referralUsed) {
@@ -70,14 +79,14 @@ export default function PaymentVerify() {
         await setDoc(doc(db, 'referral-claims', claimId), {
           referrerUsername: referralUsername.trim(),
           newUser: userId,
-          newUsername: username,
+          newUsername: chosenUsername,
           timestamp: new Date().toISOString(),
         })
       }
 
       await setDoc(doc(db, 'users', userId), {
         id: userId,
-        username,
+        username: chosenUsername,
         realName: realName.trim(),
         phoneNumber: phoneNumber.trim(),
         paymentMethod: paymentMethod === 'none' ? null : paymentMethod,
@@ -92,7 +101,7 @@ export default function PaymentVerify() {
 
       await setDoc(doc(db, 'codes', userId), {
         id: userId,
-        username,
+        username: chosenUsername,
         status: 'unused',
         createdAt: new Date().toISOString(),
       })
@@ -100,7 +109,7 @@ export default function PaymentVerify() {
       await setDoc(doc(db, 'transactions', userId), {
         id: userId,
         clientUserId: userId,
-        clientUsername: username,
+        clientUsername: chosenUsername,
         clientRealName: realName.trim(),
         clientPhoneNumber: phoneNumber.trim(),
         paymentMethod: paymentMethod === 'none' ? null : paymentMethod,
@@ -116,10 +125,11 @@ export default function PaymentVerify() {
         paidAt: null,
       })
 
-      setResult({ code: userId, username, referredBy, pendingAmount })
+      setResult({ code: userId, username: chosenUsername, referredBy, pendingAmount })
 
       setRealName('')
       setPhoneNumber('')
+      setUsername('')
       setPaymentMethod('none')
       setPaymentNumber('')
       setAccountTitle('')
@@ -144,10 +154,14 @@ export default function PaymentVerify() {
       <div className="bg-white rounded-xl border p-6 space-y-5">
         <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 rounded-lg p-3">
           <CheckCircle className="w-5 h-5" />
-          <p className="text-sm">Once verified, this will auto-generate a unique code + username for the user.</p>
+          <p className="text-sm">Once verified, this will issue a unique code for the user. You choose the username — duplicate usernames are blocked.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Username *</Label>
+            <Input value={username} onChange={e => setUsername(e.target.value)} placeholder="e.g. ahmedkhan01" />
+          </div>
           <div className="space-y-1.5">
             <Label>Real Name *</Label>
             <Input value={realName} onChange={e => setRealName(e.target.value)} placeholder="Full name" />

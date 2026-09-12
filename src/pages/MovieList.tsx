@@ -20,6 +20,7 @@ export default function MovieList() {
   const [filterFree, setFilterFree] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterGenre, setFilterGenre] = useState('')
+  const [filterSection, setFilterSection] = useState('')
   const [loading, setLoading] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<Movie | null>(null)
 
@@ -75,7 +76,8 @@ export default function MovieList() {
     const matchFree = !filterFree || (filterFree === 'free' ? m.isFree : !m.isFree)
     const matchStatus = !filterStatus || (filterStatus === 'live' ? !m.paused : m.paused)
     const matchGenre = !filterGenre || (m.genres || []).includes(filterGenre)
-    return matchSearch && matchCat && matchFree && matchStatus && matchGenre
+    const matchSection = !filterSection || (m.sections || []).includes(filterSection)
+    return matchSearch && matchCat && matchFree && matchStatus && matchGenre && matchSection
   })
 
   if (loading) {
@@ -119,6 +121,11 @@ export default function MovieList() {
           className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
           <option value="">All genres</option>
           {genres.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select>
+        <select value={filterSection} onChange={e => setFilterSection(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="">All sections</option>
+          {SECTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       </div>
 

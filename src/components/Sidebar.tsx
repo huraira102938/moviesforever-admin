@@ -24,6 +24,8 @@ const navItems = [
   { to: '/referrals', icon: Users, label: 'Referrals', group: 'Users & Codes' },
   { to: '/users', icon: Users, label: 'User Management', group: 'Users & Codes' },
   { to: '/app-sharing', icon: Share2, label: 'App Sharing', group: 'Settings' },
+  { to: '/payment-details', icon: CreditCard, label: 'Payment Details', group: 'Settings' },
+  { to: '/contact-details', icon: CreditCard, label: 'Contact Details', group: 'Settings' },
   { to: '/pricing', icon: Settings, label: 'Pricing Settings', group: 'Settings' },
 ]
 
