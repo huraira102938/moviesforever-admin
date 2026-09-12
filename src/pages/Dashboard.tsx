@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { collection, getCountFromServer } from 'firebase/firestore'
+import { collection, getCountFromServer, getDoc, doc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { Film, Users, Ticket, Image as ImageIcon, Settings, Layers, Tag } from 'lucide-react'
+import { Film, Users, Ticket, Image as ImageIcon, Settings, Layers, Tag, Download } from 'lucide-react'
 
 interface StatCardProps {
   label: string
@@ -27,19 +27,20 @@ function StatCard({ label, count, icon, color, to }: StatCardProps) {
 }
 
 export default function Dashboard() {
-  const [counts, setCounts] = useState({ movies: 0, categories: 0, genres: 0, codes: 0, users: 0, banners: 0 })
+  const [counts, setCounts] = useState({ movies: 0, categories: 0, genres: 0, codes: 0, users: 0, banners: 0, installs: 0 })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchCounts() {
       try {
-        const [moviesSnap, categoriesSnap, genresSnap, codesSnap, usersSnap, bannersSnap] = await Promise.all([
+        const [moviesSnap, categoriesSnap, genresSnap, codesSnap, usersSnap, bannersSnap, installsSnap] = await Promise.all([
           getCountFromServer(collection(db, 'movies')),
           getCountFromServer(collection(db, 'categories')),
           getCountFromServer(collection(db, 'genres')),
           getCountFromServer(collection(db, 'codes')),
           getCountFromServer(collection(db, 'users')),
           getCountFromServer(collection(db, 'banners')),
+          getDoc(doc(db, 'installs', 'counter')),
         ])
         setCounts({
           movies: moviesSnap.data().count,
@@ -48,6 +49,7 @@ export default function Dashboard() {
           codes: codesSnap.data().count,
           users: usersSnap.data().count,
           banners: bannersSnap.data().count,
+          installs: installsSnap.exists() ? (installsSnap.data().installCount || 0) : 0,
         })
       } catch (err) {
         console.error('Failed to fetch counts:', err)
@@ -79,6 +81,7 @@ export default function Dashboard() {
         <StatCard label="Redemption Codes" count={counts.codes} icon={<Ticket className="w-6 h-6 text-purple-600" />} color="bg-purple-50" to="/codes" />
         <StatCard label="Users" count={counts.users} icon={<Users className="w-6 h-6 text-blue-600" />} color="bg-blue-50" to="/users" />
         <StatCard label="Banners" count={counts.banners} icon={<ImageIcon className="w-6 h-6 text-pink-600" />} color="bg-pink-50" to="/banners" />
+        <StatCard label="Installs" count={counts.installs} icon={<Download className="w-6 h-6 text-cyan-600" />} color="bg-cyan-50" to="/" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Link to="/movies/upload" className="block rounded-xl border bg-indigo-600 text-white p-5 shadow-sm hover:bg-indigo-700 transition-colors">
