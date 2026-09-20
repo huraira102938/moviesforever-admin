@@ -12,6 +12,7 @@ import {
   Share2,
   Bell,
   Flame,
+  X,
 } from 'lucide-react'
 
 const navItems = [
@@ -35,7 +36,12 @@ const navItems = [
 
 const groupOrder = ['Main', 'Content', 'Users & Codes', 'Settings']
 
-export default function Sidebar() {
+interface SidebarProps {
+  open: boolean
+  onClose: () => void
+}
+
+export default function Sidebar({ open, onClose }: SidebarProps) {
   const grouped = navItems.reduce<Record<string, typeof navItems>>((acc, item) => {
     if (!acc[item.group]) acc[item.group] = []
     acc[item.group].push(item)
@@ -43,8 +49,25 @@ export default function Sidebar() {
   }, {})
 
   return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex flex-col fixed h-full overflow-y-auto">
-      <div className="p-4 border-b border-gray-200">
+    <aside
+      className={`fixed inset-y-0 left-0 z-50 w-60 bg-white border-r border-gray-200 flex flex-col overflow-y-auto transition-transform duration-300 lg:translate-x-0 lg:static ${
+        open ? 'translate-x-0' : '-translate-x-full'
+      }`}
+    >
+      <div className="lg:hidden flex items-center justify-between p-4 border-b border-gray-200">
+        <div>
+          <h1 className="text-xl font-bold text-indigo-600">MoviesForever</h1>
+          <p className="text-xs text-gray-400">Admin Panel</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1 rounded-lg text-gray-500 hover:bg-gray-100"
+          aria-label="Close menu"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+      <div className="hidden lg:block p-4 border-b border-gray-200">
         <h1 className="text-xl font-bold text-indigo-600">MoviesForever</h1>
         <p className="text-xs text-gray-400">Admin Panel</p>
       </div>
@@ -60,6 +83,7 @@ export default function Sidebar() {
                   key={item.to}
                   to={item.to}
                   end={item.to === '/'}
+                  onClick={onClose}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       isActive
@@ -68,8 +92,8 @@ export default function Sidebar() {
                     }`
                   }
                 >
-                  <item.icon className="w-4 h-4" />
-                  {item.label}
+                  <item.icon className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{item.label}</span>
                 </NavLink>
               ))}
             </div>
