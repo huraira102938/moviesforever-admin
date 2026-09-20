@@ -13,6 +13,20 @@ const r2Client = new S3Client({
 
 const CHUNK_SIZE = 16 * 1024 * 1024 // 16MB per part
 
+// R2 objects are immutable in practice: uploads always get a brand-new key
+// (see the `-${Date.now()}` suffix used everywhere this is called from), so
+// it's always safe to tell every cache in the chain -- Cloudflare's edge,
+// and any browser/ExoPlayer cache on the client -- to hold onto these for a
+// full year without re-checking. This is what actually lets Cloudflare
+// serve repeat requests for the same video/thumbnail from its edge cache
+// instead of hitting this R2 bucket (and being billed for it) every time.
+//
+// IMPORTANT: because of `immutable`, if a file at an existing key ever
+// needs to change, upload it under a NEW key instead of overwriting this
+// one -- otherwise caches (edge and client) may keep serving the old bytes
+// for up to a year.
+const LONG_LIVED_CACHE_CONTROL = 'public, max-age=31536000, immutable'
+
 async function uploadMultipart(
   file: File,
   key: string,
@@ -25,6 +39,8 @@ async function uploadMultipart(
     Bucket: bucket,
     Key: key,
     ContentType: file.type || 'application/octet-stream',
+    CacheControl: LONG_LIVED_CACHE_CONTROL,
+    ContentDisposition: 'attachment',
   }))
   const uploadId = createResp.UploadId
 
@@ -94,6 +110,8 @@ export async function uploadToR2(
     Key: key,
     Body: body,
     ContentType: file.type || 'application/octet-stream',
+    CacheControl: LONG_LIVED_CACHE_CONTROL,
+    ContentDisposition: 'attachment',
   }))
   return { Key: key }
 }

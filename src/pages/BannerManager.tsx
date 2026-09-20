@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { getMovies } from '../lib/moviesCache'
 import type { Banner, Movie } from '../lib/types'
 import FileUploader from '../components/FileUploader'
 import Button from '../components/Button'
@@ -26,12 +27,12 @@ export default function BannerManager() {
 
   async function loadData() {
     try {
-      const [bannerSnap, movieSnap] = await Promise.all([
+      const [bannerSnap, movieList] = await Promise.all([
         getDocs(collection(db, 'banners')),
-        getDocs(collection(db, 'movies')),
+        getMovies(),
       ])
       setBanners(bannerSnap.docs.map(d => ({ id: d.id, ...d.data() } as Banner)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)))
-      setMovies(movieSnap.docs.map(d => ({ id: d.id, ...d.data() } as Movie)))
+      setMovies(movieList)
     } catch (err) {
       console.error(err)
       toast.error('Failed to load data')

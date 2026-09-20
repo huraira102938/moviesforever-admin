@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { getMovies } from '../lib/moviesCache'
 import type { TrendingItem, Movie } from '../lib/types'
 import Button from '../components/Button'
 import Badge from '../components/Badge'
@@ -20,12 +21,12 @@ export default function Trending() {
 
   async function loadData() {
     try {
-      const [trendingSnap, movieSnap] = await Promise.all([
+      const [trendingSnap, movieList] = await Promise.all([
         getDocs(collection(db, 'trending')),
-        getDocs(collection(db, 'movies')),
+        getMovies(),
       ])
       setItems(trendingSnap.docs.map(d => ({ id: d.id, ...d.data() } as TrendingItem)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)))
-      setMovies(movieSnap.docs.map(d => ({ id: d.id, ...d.data() } as Movie)))
+      setMovies(movieList)
     } catch (err) {
       console.error(err)
       toast.error('Failed to load data')

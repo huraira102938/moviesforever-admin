@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { getMovies, updateCachedMovie, removeCachedMovie } from '../lib/moviesCache'
 import type { Movie, Category, Genre } from '../lib/types'
 import { SECTIONS } from '../lib/types'
 import Button from '../components/Button'
@@ -26,12 +27,12 @@ export default function MovieList() {
 
   async function loadData() {
     try {
-      const [movieSnap, catSnap, genreSnap] = await Promise.all([
-        getDocs(collection(db, 'movies')),
+      const [movieList, catSnap, genreSnap] = await Promise.all([
+        getMovies(),
         getDocs(collection(db, 'categories')),
         getDocs(collection(db, 'genres')),
       ])
-      setMovies(movieSnap.docs.map(d => ({ id: d.id, ...d.data() } as Movie)).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
+      setMovies([...movieList].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
       setCategories(catSnap.docs.map(d => ({ id: d.id, ...d.data() } as Category)))
       setGenres(genreSnap.docs.map(d => ({ id: d.id, ...d.data() } as Genre)))
     } catch (err) {
@@ -49,7 +50,9 @@ export default function MovieList() {
 
   async function togglePause(movie: Movie) {
     try {
-      await updateDoc(doc(db, 'movies', movie.id), { paused: !movie.paused, updatedAt: new Date().toISOString() })
+      const updatedAt = new Date().toISOString()
+      await updateDoc(doc(db, 'movies', movie.id), { paused: !movie.paused, updatedAt })
+      updateCachedMovie(movie.id, { paused: !movie.paused, updatedAt })
       setMovies(prev => prev.map(m => m.id === movie.id ? { ...m, paused: !m.paused } : m))
       toast.success(movie.paused ? 'Movie resumed' : 'Movie paused')
     } catch (err) {
@@ -61,6 +64,7 @@ export default function MovieList() {
     if (!deleteTarget) return
     try {
       await deleteDoc(doc(db, 'movies', deleteTarget.id))
+      removeCachedMovie(deleteTarget.id)
       setMovies(prev => prev.filter(m => m.id !== deleteTarget.id))
       toast.success('Movie deleted')
     } catch (err) {

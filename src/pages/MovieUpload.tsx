@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { collection, getDocs, doc, addDoc, updateDoc } from 'firebase/firestore'
+import { collection, getDocs, getDoc, doc, addDoc, updateDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { addCachedMovie, updateCachedMovie } from '../lib/moviesCache'
 import { SECTIONS } from '../lib/types'
 import type { Category, Genre } from '../lib/types'
 import FileUploader from '../components/FileUploader'
@@ -51,9 +52,11 @@ export default function MovieUpload() {
       setGenres(genreSnap.docs.map(d => ({ id: d.id, ...d.data() } as Genre)))
 
       if (editId) {
-        const movieSnap = await getDocs(collection(db, 'movies'))
-        const movieDoc = movieSnap.docs.find(d => d.id === editId)
-        if (movieDoc) {
+        // Read just this one movie (1 read) instead of the whole collection.
+        // Deliberately NOT served from the cache: the form saves every field,
+        // so it must start from the freshest data.
+        const movieDoc = await getDoc(doc(db, 'movies', editId))
+        if (movieDoc.exists()) {
           const m = movieDoc.data()
           setTitle(m.title || '')
           setCategory(m.category || '')
@@ -126,9 +129,12 @@ export default function MovieUpload() {
 
       if (isEditing && editId) {
         await updateDoc(doc(db, 'movies', editId), movieData)
+        updateCachedMovie(editId, movieData)
         toast.success('Movie updated successfully')
       } else {
-        await addDoc(collection(db, 'movies'), { ...movieData, createdAt: new Date().toISOString() })
+        const createdAt = new Date().toISOString()
+        const newDoc = await addDoc(collection(db, 'movies'), { ...movieData, createdAt })
+        addCachedMovie(newDoc.id, { ...movieData, createdAt })
         toast.success('Movie uploaded successfully')
       }
       navigate('/movies/list')

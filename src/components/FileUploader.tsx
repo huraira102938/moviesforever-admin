@@ -3,13 +3,14 @@ import { uploadToR2 } from '../lib/r2'
 import { Upload, X, CheckCircle, Image as ImageIcon } from 'lucide-react'
 
 interface FileUploaderProps {
-  onUpload: (key: string, publicUrl: string) => void
+  onUpload: (key: string, publicUrl: string, size?: number) => void
+  onClear?: () => void
   accept?: string
   label: string
   showPreview?: boolean
 }
 
-export default function FileUploader({ onUpload, accept = 'video/*', label, showPreview = true }: FileUploaderProps) {
+export default function FileUploader({ onUpload, onClear, accept = 'video/*', label, showPreview = true }: FileUploaderProps) {
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -48,7 +49,7 @@ export default function FileUploader({ onUpload, accept = 'video/*', label, show
       setFile(null)
       setPreview(null)
       if (inputRef.current) inputRef.current.value = ''
-      onUpload(key, publicUrl)
+      onUpload(key, publicUrl, file.size)
     } catch (err: any) {
       console.error('Upload failed:', err)
       const msg = err?.message || ''
@@ -77,6 +78,7 @@ export default function FileUploader({ onUpload, accept = 'video/*', label, show
     setProgress(0)
     setError(null)
     if (inputRef.current) inputRef.current.value = ''
+    onClear?.()
   }
 
   const isImage = file?.type.startsWith('image/') || accept.includes('image/')
