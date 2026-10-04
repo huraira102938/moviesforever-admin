@@ -12,6 +12,7 @@ import {
   Share2,
   Bell,
   Flame,
+  FileJson,
   X,
 } from 'lucide-react'
 
@@ -23,6 +24,7 @@ const navItems = [
   { to: '/genres', icon: Tag, label: 'Genres', group: 'Content' },
   { to: '/banners', icon: ImageIcon, label: 'Banners', group: 'Content' },
   { to: '/trending', icon: Flame, label: 'Trending', group: 'Content' },
+  { to: '/json-data', icon: FileJson, label: 'Movie Data (JSON)', group: 'Content' },
   { to: '/codes', icon: Ticket, label: 'Code Generator', group: 'Users & Codes' },
   { to: '/payments', icon: CreditCard, label: 'Payment Verify', group: 'Users & Codes' },
   { to: '/referrals', icon: Users, label: 'Referrals', group: 'Users & Codes' },

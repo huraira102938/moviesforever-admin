@@ -1,4 +1,4 @@
-import { S3Client, UploadPartCommand, CreateMultipartUploadCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, HeadObjectCommand, UploadPartCommand, CreateMultipartUploadCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand } from '@aws-sdk/client-s3'
 
 const r2Client = new S3Client({
   endpoint: `https://${import.meta.env.VITE_CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -114,6 +114,45 @@ export async function uploadToR2(
     ContentDisposition: 'attachment',
   }))
   return { Key: key }
+}
+
+// ---------------------------------------------------------------------------
+// Fixed-name JSON data files (bollywood.json, hollywood.json, ...)
+//
+// Unlike videos/thumbnails these keep the SAME key forever and are replaced in
+// place, so they must NOT use LONG_LIVED_CACHE_CONTROL ("immutable", 1 year) --
+// otherwise Cloudflare's edge and the phones would keep serving the old file.
+// `no-cache` = caches may store it but must re-check before using it.
+//
+// R2 PutObject on an existing key replaces the old object in one atomic step:
+// the previous file is gone and the new one takes its place, with no moment
+// where the file is missing.
+// ---------------------------------------------------------------------------
+const JSON_CACHE_CONTROL = 'no-cache'
+
+export async function uploadJsonToR2(key: string, jsonText: string) {
+  await r2Client.send(new PutObjectCommand({
+    Bucket: import.meta.env.VITE_R2_BUCKET_NAME,
+    Key: key,
+    Body: new TextEncoder().encode(jsonText),
+    ContentType: 'application/json; charset=utf-8',
+    CacheControl: JSON_CACHE_CONTROL,
+  }))
+  return { Key: key }
+}
+
+/** Size + last-modified of what is currently stored at `key`, or null if it doesn't exist. */
+export async function headR2Object(key: string): Promise<{ size: number; lastModified?: Date } | null> {
+  try {
+    const res = await r2Client.send(new HeadObjectCommand({
+      Bucket: import.meta.env.VITE_R2_BUCKET_NAME,
+      Key: key,
+    }))
+    return { size: res.ContentLength ?? 0, lastModified: res.LastModified }
+  } catch (err: any) {
+    if (err?.name === 'NotFound' || err?.$metadata?.httpStatusCode === 404) return null
+    throw err
+  }
 }
 
 export function getR2PublicUrl(key: string): string {

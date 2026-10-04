@@ -17,6 +17,7 @@ import ContactDetails from './pages/ContactDetails'
 import Notifications from './pages/Notifications'
 import Trending from './pages/Trending'
 import AppSharing from './pages/AppSharing'
+import JsonDataManager from './pages/JsonDataManager'
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
           <Route path="contact-details" element={<ContactDetails />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="trending" element={<Trending />} />
+          <Route path="json-data" element={<JsonDataManager />} />
         </Route>
       </Routes>
     </BrowserRouter>
