@@ -104,11 +104,17 @@ export interface PaymentTransaction {
 
 export type NotificationTarget = 'free' | 'paid' | 'paused'
 
+export type PushStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'expired'
+
 export interface AppNotification {
   id: string
   text: string
   targets: NotificationTarget[]
   createdAt: string
+  /** Push delivery state, maintained by the Cloudflare Worker cron. Absent on old notifications. */
+  pushStatus?: PushStatus
+  pushedAt?: string
+  pushError?: string
 }
 
 export const REFERRAL_PAYOUT_OPTIONS = [50, 100, 150, 200] as const

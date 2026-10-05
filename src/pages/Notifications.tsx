@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import type { AppUser, PaymentTransaction, AppNotification, NotificationTarget } from '../lib/types'
+import type { AppUser, PaymentTransaction, AppNotification, NotificationTarget, PushStatus } from '../lib/types'
 import Button from '../components/Button'
 import ConfirmModal from '../components/ConfirmModal'
 import Badge from '../components/Badge'
@@ -13,6 +13,14 @@ const TARGET_OPTIONS: { value: NotificationTarget; label: string }[] = [
   { value: 'paid', label: 'Paid Users' },
   { value: 'paused', label: 'Paused Users' },
 ]
+
+const PUSH_BADGE: Record<PushStatus, { label: string; variant: 'default' | 'success' | 'warning' | 'destructive' }> = {
+  pending: { label: 'push queued', variant: 'warning' },
+  sending: { label: 'push sending', variant: 'warning' },
+  sent: { label: 'push sent', variant: 'success' },
+  failed: { label: 'push failed', variant: 'destructive' },
+  expired: { label: 'push expired', variant: 'default' },
+}
 
 export default function Notifications() {
   const [users, setUsers] = useState<AppUser[]>([])
@@ -69,12 +77,13 @@ export default function Notifications() {
     setSending(true)
     try {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-      const notif: AppNotification = { id, text: trimmed, targets, createdAt: new Date().toISOString() }
+      // pushStatus 'pending' queues a push: the Worker cron sends it to the chosen groups within ~1 minute.
+      const notif: AppNotification = { id, text: trimmed, targets, createdAt: new Date().toISOString(), pushStatus: 'pending' }
       await setDoc(doc(db, 'notifications', id), notif)
       setNotifications(prev => [notif, ...prev])
       setText('')
       setTargets([])
-      toast.success('Notification sent')
+      toast.success('Notification queued — push goes out within a minute')
     } catch (err) {
       toast.error('Failed to send notification')
     } finally {
@@ -103,7 +112,7 @@ export default function Notifications() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-        <p className="text-sm text-gray-500 mt-1">Send in-app notifications to user groups</p>
+        <p className="text-sm text-gray-500 mt-1">Sends a push notification and an in-app message to the selected user groups</p>
       </div>
 
       <div className="bg-white rounded-xl border p-6 space-y-5">
@@ -169,6 +178,11 @@ export default function Notifications() {
                   <p className="text-sm text-gray-900 whitespace-pre-wrap">{notif.text}</p>
                   <div className="flex items-center gap-2 mt-2">
                     {notif.targets.map(t => <Badge key={t} variant={t === 'paused' ? 'warning' : t === 'paid' ? 'success' : 'default'}>{t} ({targetCounts[t]})</Badge>)}
+                    {notif.pushStatus && (
+                      <span title={notif.pushError}>
+                        <Badge variant={PUSH_BADGE[notif.pushStatus].variant}>{PUSH_BADGE[notif.pushStatus].label}</Badge>
+                      </span>
+                    )}
                     <span className="text-xs text-gray-400 ml-1">{new Date(notif.createdAt).toLocaleString()}</span>
                   </div>
                 </div>
