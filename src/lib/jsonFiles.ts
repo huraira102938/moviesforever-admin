@@ -1,7 +1,7 @@
 /**
- * The fixed set of movie-data JSON files the Android app downloads.
+ * The 8 movie-data JSON files the Android app downloads.
  * `key` is the exact object name in R2 and MUST match `TmdbCategory.fileName`
- * in the app (data/model/TmdbMovie.kt). Add/remove a line here to add/remove a slot.
+ * in the app (data/model/TmdbMovie.kt).
  */
 export interface JsonSlot {
   key: string
@@ -19,5 +19,5 @@ export const JSON_SLOTS: JsonSlot[] = [
   { key: 'trending.json', label: 'Trending' },
 ]
 
-/** Same minimum the app's Home screen uses (movies rated strictly above this are shown). */
+/** Same rule the app's Home screen uses: only movies rated strictly above this are shown. */
 export const HOME_MIN_RATING = 7
