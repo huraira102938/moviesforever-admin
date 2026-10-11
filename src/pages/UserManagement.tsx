@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { collection, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore'
+import { collection, getDocs, doc, deleteDoc, updateDoc, deleteField } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import type { AppUser, PaymentTransaction } from '../lib/types'
 import Badge from '../components/Badge'
 import ConfirmModal from '../components/ConfirmModal'
 import PauseModal from '../components/PauseModal'
 import { toast } from 'sonner'
-import { Trash2, Search, ChevronDown, ChevronUp, CheckCircle2, Wallet, CircleDollarSign, Pause, Play } from 'lucide-react'
+import { Trash2, Search, ChevronDown, ChevronUp, CheckCircle2, Wallet, CircleDollarSign, Pause, Play, RotateCcw } from 'lucide-react'
 
 export default function UserManagement() {
   const [users, setUsers] = useState<AppUser[]>([])
@@ -101,6 +101,20 @@ export default function UserManagement() {
     }
   }
 
+  async function handleResetCode(user: AppUser) {
+    try {
+      await updateDoc(doc(db, 'codes', user.id), {
+        status: 'unused',
+        usedAt: deleteField(),
+        updatedAt: new Date().toISOString(),
+      })
+      toast.success(`Redemption code for "${user.username}" reset to unused`)
+    } catch (err) {
+      console.error(err)
+      toast.error(`Failed to reset code for "${user.username}"`)
+    }
+  }
+
   const filtered = users.filter(u => {
     const matchStatus = !filterStatus || (filterStatus === 'paused' ? u.paused : !u.paused)
     if (!matchStatus) return false
@@ -176,6 +190,7 @@ export default function UserManagement() {
                   onPause={() => setPauseTarget(user)}
                   onResume={() => handleResume(user)}
                   onMarkPaid={handleMarkPaid}
+                  onResetCode={handleResetCode}
                 />
               )
             })}
@@ -199,7 +214,7 @@ export default function UserManagement() {
 }
 
 function FragmentRow({
-  user, rTxns, isOpen, totalPending, totalCompleted, totalReceived, onToggle, onDelete, onPause, onResume, onMarkPaid,
+  user, rTxns, isOpen, totalPending, totalCompleted, totalReceived, onToggle, onDelete, onPause, onResume, onMarkPaid, onResetCode,
 }: {
   user: AppUser
   rTxns: PaymentTransaction[]
@@ -212,6 +227,7 @@ function FragmentRow({
   onPause: () => void
   onResume: () => void
   onMarkPaid: (txn: PaymentTransaction) => void
+  onResetCode: (user: AppUser) => void
 }) {
   return (
     <>
@@ -245,6 +261,13 @@ function FragmentRow({
         </td>
         <td className="px-4 py-2.5">
           <div className="flex items-center justify-end gap-1">
+            <button
+              onClick={() => onResetCode(user)}
+              className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-700 transition-colors"
+              title="Reset redemption code to unused (in case app failed to unlock)"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
             {user.paused ? (
               <button onClick={onResume} className="p-1.5 rounded hover:bg-gray-100 text-amber-600 hover:text-amber-700" title="Resume user">
                 <Play className="w-4 h-4" />

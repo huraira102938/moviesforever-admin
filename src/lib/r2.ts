@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, HeadObjectCommand, UploadPartCommand, CreateMultipartUploadCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, UploadPartCommand, CreateMultipartUploadCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand } from '@aws-sdk/client-s3'
 
 const r2Client = new S3Client({
   endpoint: `https://${import.meta.env.VITE_CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -165,6 +165,23 @@ export async function headR2Object(key: string): Promise<R2ObjectInfo | null> {
     }
   } catch (err: any) {
     if (err?.name === 'NotFound' || err?.$metadata?.httpStatusCode === 404) return null
+    throw err
+  }
+}
+
+/**
+ * Reads the stored text at `key` through the S3 API (same credentials/CORS as uploads, so it does not
+ * depend on the public URL or its cache). null = nothing is stored there; other errors are thrown.
+ */
+export async function getTextFromR2(key: string): Promise<string | null> {
+  try {
+    const res = await r2Client.send(new GetObjectCommand({
+      Bucket: import.meta.env.VITE_R2_BUCKET_NAME,
+      Key: key,
+    }))
+    return (await res.Body?.transformToString()) ?? null
+  } catch (err: any) {
+    if (err?.name === 'NoSuchKey' || err?.name === 'NotFound' || err?.$metadata?.httpStatusCode === 404) return null
     throw err
   }
 }

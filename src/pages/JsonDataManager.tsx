@@ -1,273 +1,282 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, RefreshCw, Upload, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, FileJson, RefreshCw, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import Card, { CardContent } from '../components/Card'
 import Button from '../components/Button'
-import { HOME_MIN_RATING, JSON_SLOTS, type JsonSlot } from '../lib/jsonFiles'
-import { fetchLiveJson, headR2Object, uploadJsonToR2, type R2ObjectInfo } from '../lib/r2'
+import {
+  CATALOGUE_BACKUP_KEY,
+  CATALOGUE_KEY,
+  buildCatalogue,
+  diffCatalogue,
+  loadSources,
+  parseCatalogue,
+  serializeCatalogue,
+  type BuildResult,
+  type CatalogueDiff,
+  type CatalogueFile,
+} from '../lib/catalogueJson'
+import { getTextFromR2, headR2Object, uploadJsonToR2, type R2ObjectInfo } from '../lib/r2'
 
-const MAX_BYTES = 25 * 1024 * 1024
-
-interface Summary {
-  total: number
-  valid: number
-  skipped: number
-  duplicates: number
-  homeEligible: number
-  sampleTitles: string[]
+interface Preview {
+  build: BuildResult
+  diff: CatalogueDiff
+  live: CatalogueFile | null
+  liveText: string | null
+  text: string
 }
-
-type Validation = { ok: true; summary: Summary; text: string } | { ok: false; error: string }
-
-/** Mirrors what the app accepts: a JSON array of objects with a numeric id > 0 and a non-blank title. */
-function validateMovies(raw: string): Validation {
-  const text = raw.replace(/^\uFEFF/, '') // strip BOM
-  let data: unknown
-  try {
-    data = JSON.parse(text)
-  } catch (e: any) {
-    return { ok: false, error: `Not valid JSON: ${String(e?.message ?? e).slice(0, 140)}` }
-  }
-  if (!Array.isArray(data)) return { ok: false, error: 'The file must be a JSON array: [ {...}, {...} ]' }
-  if (data.length === 0) return { ok: false, error: 'The file is an empty array.' }
-
-  const seen = new Set<number>()
-  let valid = 0
-  let duplicates = 0
-  let homeEligible = 0
-  const sampleTitles: string[] = []
-  for (const item of data as any[]) {
-    const okItem =
-      item && typeof item === 'object' &&
-      typeof item.id === 'number' && item.id > 0 &&
-      typeof item.title === 'string' && item.title.trim() !== ''
-    if (!okItem) continue
-    valid++
-    if (seen.has(item.id)) duplicates++
-    seen.add(item.id)
-    if (typeof item.rating === 'number' && item.rating > HOME_MIN_RATING) homeEligible++
-    if (sampleTitles.length < 3) sampleTitles.push(item.title)
-  }
-  if (valid === 0) {
-    return { ok: false, error: 'No usable movies found. Each item needs a numeric "id" and a "title".' }
-  }
-  return { ok: true, text, summary: { total: data.length, valid, skipped: data.length - valid, duplicates, homeEligible, sampleTitles } }
-}
-
-interface Picked {
-  fileName: string
-  size: number
-  text?: string
-  summary?: Summary
-  error?: string
-}
-
-interface Live {
-  info: R2ObjectInfo | null // null = nothing uploaded yet
-  count?: number // movies in the live file (only if the public URL could be read)
-}
-
-type LiveState = Live | 'error' | undefined
 
 function formatSize(bytes: number) {
   return bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
-export default function JsonDataManager() {
-  const [picked, setPicked] = useState<Record<string, Picked | undefined>>({})
-  const [live, setLive] = useState<Record<string, LiveState>>({})
-  const [busy, setBusy] = useState<Record<string, boolean>>({})
-  const [justUpdated, setJustUpdated] = useState<Record<string, boolean>>({})
+function TitleList({ label, titles, tone }: { label: string; titles: string[]; tone: string }) {
+  if (titles.length === 0) return null
+  const shown = titles.slice(0, 12)
+  return (
+    <div className="text-sm">
+      <p className={`font-medium ${tone}`}>{label} ({titles.length})</p>
+      <p className="text-xs text-gray-600">
+        {shown.join(', ')}
+        {titles.length > shown.length && ` ... and ${titles.length - shown.length} more`}
+      </p>
+    </div>
+  )
+}
 
-  const refreshLive = useCallback(async (key: string) => {
+/** Plain-words list of what the app will show: only categories that have movies, Trending only if it has any. */
+function AppWillShow({ file }: { file: CatalogueFile }) {
+  const counts = new Map<string, number>()
+  file.movies.forEach(m => counts.set(m.category, (counts.get(m.category) ?? 0) + 1))
+  const shelves = file.categories.filter(c => (counts.get(c.id) ?? 0) > 0)
+  return (
+    <div className="text-xs text-gray-600 bg-gray-50 border rounded-lg px-3 py-2 space-y-0.5">
+      <p className="font-medium text-gray-700">The app will show</p>
+      {shelves.map(c => <p key={c.id}>{c.name}: {counts.get(c.id)} movies</p>)}
+      <p>{file.trending.length > 0 ? `Trending: ${file.trending.length} movies` : 'No Trending section (nothing in the Trending list)'}</p>
+      <p className="text-gray-400">A category with no movies is not shown.</p>
+    </div>
+  )
+}
+
+export default function JsonDataManager() {
+  const [synced, setSynced] = useState<CatalogueFile | null>(null)
+  const [info, setInfo] = useState<R2ObjectInfo | null | 'error' | undefined>(undefined)
+  const [liveCount, setLiveCount] = useState<number | undefined>()
+  const [checking, setChecking] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [preview, setPreview] = useState<Preview | null>(null)
+  const [upToDate, setUpToDate] = useState(false)
+  const [justPublished, setJustPublished] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const refreshLive = useCallback(async () => {
     try {
-      const info = await headR2Object(key)
-      let count: number | undefined
-      if (info) {
-        const json = await fetchLiveJson(key)
-        if (Array.isArray(json)) count = json.length
+      const head = await headR2Object(CATALOGUE_KEY)
+      setInfo(head)
+      if (head) {
+        const live = parseCatalogue(await getTextFromR2(CATALOGUE_KEY))
+        setLiveCount(live?.movies.length)
+      } else {
+        setLiveCount(undefined)
       }
-      setLive(prev => ({ ...prev, [key]: { info, count } }))
     } catch {
-      setLive(prev => ({ ...prev, [key]: 'error' }))
+      setInfo('error')
     }
   }, [])
 
-  useEffect(() => {
-    JSON_SLOTS.forEach(s => { void refreshLive(s.key) })
-  }, [refreshLive])
+  useEffect(() => { void refreshLive() }, [refreshLive])
 
-  async function choose(slot: JsonSlot, file: File | null | undefined) {
-    if (!file) return
-    setJustUpdated(prev => ({ ...prev, [slot.key]: false }))
-    if (file.size > MAX_BYTES) {
-      setPicked(prev => ({ ...prev, [slot.key]: { fileName: file.name, size: file.size, error: 'File is larger than 25 MB.' } }))
-      return
-    }
-    const result = validateMovies(await file.text())
-    setPicked(prev => ({
-      ...prev,
-      [slot.key]: 'error' in result
-        ? { fileName: file.name, size: file.size, error: result.error }
-        : { fileName: file.name, size: file.size, text: result.text, summary: result.summary },
-    }))
-  }
-
-  function clear(slot: JsonSlot) {
-    setPicked(prev => ({ ...prev, [slot.key]: undefined }))
-  }
-
-  async function replace(slot: JsonSlot) {
-    const p = picked[slot.key]
-    const l = live[slot.key]
-    if (!p?.text || !p.summary) return
-
-    const liveCount = l && l !== 'error' ? l.count : undefined
-    const msg =
-      `Replace the live "${slot.label}" file with ${p.fileName}?\n\n` +
-      `New file: ${p.summary.valid} movies\n` +
-      (liveCount !== undefined ? `Current live file: ${liveCount} movies\n` : '') +
-      `\nThe current file will be permanently overwritten. This cannot be undone.`
-    if (!window.confirm(msg)) return
-
-    setBusy(prev => ({ ...prev, [slot.key]: true }))
+  /** Step 1: read Firestore + the live file, work out what changed. Nothing is uploaded yet. */
+  async function checkForChanges() {
+    setChecking(true)
+    setError(null)
+    setPreview(null)
+    setUpToDate(false)
+    setSynced(null)
+    setJustPublished(false)
     try {
-      // Same key every time -> the previous file is replaced by this one.
-      await uploadJsonToR2(slot.key, p.text)
-      setPicked(prev => ({ ...prev, [slot.key]: undefined }))
-      setJustUpdated(prev => ({ ...prev, [slot.key]: true }))
-      await refreshLive(slot.key)
-      toast.success(`${slot.label} updated (${p.summary.valid} movies). The app will pick it up next time it opens.`)
+      const [sources, liveText] = await Promise.all([loadSources(), getTextFromR2(CATALOGUE_KEY)])
+      const live = parseCatalogue(liveText)
+      if (liveText && !live) {
+        toast.warning('The live movies.json could not be read - it will be rebuilt completely.')
+      }
+      const build = buildCatalogue(sources)
+      if (build.file.movies.length === 0) {
+        setError('There are no publishable movies in Firestore (every movie is paused or has no video yet). Nothing was changed.')
+        return
+      }
+      const diff = diffCatalogue(live, build.file)
+      if (!diff.hasChanges) {
+        setSynced(build.file)
+        setUpToDate(true)
+        return
+      }
+      setPreview({ build, diff, live, liveText, text: serializeCatalogue(build.file) })
     } catch (err: any) {
       console.error(err)
-      setPicked(prev => ({ ...prev, [slot.key]: { ...p, error: `Upload failed: ${String(err?.message ?? err).slice(0, 160)}` } }))
-      toast.error(`${slot.label}: upload failed - the old file is unchanged`)
+      setError(`Could not check for changes: ${String(err?.message ?? err).slice(0, 200)}`)
     } finally {
-      setBusy(prev => ({ ...prev, [slot.key]: false }))
+      setChecking(false)
     }
   }
+
+  /** Step 2: upload once. The previous file is first copied to movies.prev.json as a safety net. */
+  async function publish() {
+    if (!preview) return
+    const { diff, build, live, liveText, text } = preview
+    const liveTotal = live?.movies.length ?? 0
+    if (liveTotal > 0 && build.file.movies.length < liveTotal * 0.5) {
+      const ok = window.confirm(
+        `The new file has ${build.file.movies.length} movies but the live one has ${liveTotal}.\n` +
+        `That is less than half. Publish anyway?`,
+      )
+      if (!ok) return
+    }
+
+    setPublishing(true)
+    try {
+      if (liveText) await uploadJsonToR2(CATALOGUE_BACKUP_KEY, liveText)
+      await uploadJsonToR2(CATALOGUE_KEY, text)
+      setPreview(null)
+      setJustPublished(true)
+      await refreshLive()
+      toast.success(
+        `movies.json updated: ${diff.added.length} added, ${diff.updated.length} changed, ${diff.removed.length} removed. ` +
+        `Phones download it the next time the app opens.`,
+      )
+    } catch (err: any) {
+      console.error(err)
+      setError(`Upload failed: ${String(err?.message ?? err).slice(0, 200)}. The live file was not changed.`)
+      toast.error('Upload failed - the live file is unchanged')
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  const busy = checking || publishing
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Movie Data (JSON)</h1>
         <p className="text-sm text-gray-500 mt-1">
-          One card per category file. Update any of them on its own: choose the new file, check the summary,
-          then replace. The old file is overwritten by the new one in the same place. The app only downloads a
-          file again when it has changed, and shows the new data the next time it opens.
+          The app reads all movies from one file, <span className="font-mono">{CATALOGUE_KEY}</span>, never from Firebase.
+          Upload movies all week as usual, then press <b>Check for updates</b> once. It compares your Firebase data
+          with the JSON file and shows what is new, changed or removed. Only movies that exist in Firebase stay in the
+          JSON. Nothing is uploaded until you press <b>Update JSON file</b>. Phones download the file only when it
+          changes and keep a saved copy.
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {JSON_SLOTS.map(slot => {
-          const p = picked[slot.key]
-          const l = live[slot.key]
-          const isBusy = !!busy[slot.key]
-          const liveCount = l && l !== 'error' ? l.count : undefined
-          const looksSmaller =
-            !!p?.summary && liveCount !== undefined && liveCount > 0 && p.summary.valid < liveCount * 0.5
+      <Card>
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <FileJson className="w-5 h-5 text-indigo-600" />
+              <div>
+                <p className="font-semibold text-gray-900">Live file</p>
+                <p className="text-xs text-gray-400 font-mono">{CATALOGUE_KEY}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              title="Refresh live status"
+              onClick={() => void refreshLive()}
+              disabled={busy}
+              className="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-gray-100 disabled:opacity-40"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
 
-          return (
-            <Card key={slot.key}>
-              <CardContent className="pt-6 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-gray-900">{slot.label}</p>
-                    <p className="text-xs text-gray-400 font-mono">{slot.key}</p>
-                  </div>
-                  <button
-                    type="button"
-                    title="Refresh live status"
-                    onClick={() => void refreshLive(slot.key)}
-                    className="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-gray-100"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                </div>
+          <div className="text-xs text-gray-600 bg-gray-50 border rounded-lg px-3 py-2 space-y-0.5">
+            {info === undefined && <p>Checking...</p>}
+            {info === 'error' && <p>Could not check (R2 CORS must allow HEAD and GET requests).</p>}
+            {info === null && <p>Nothing uploaded yet. The first update creates the file.</p>}
+            {info && info !== 'error' && (
+              <>
+                <p>
+                  {formatSize(info.size)}
+                  {liveCount !== undefined && ` - ${liveCount} movies`}
+                </p>
+                {info.lastModified && <p>Last updated {info.lastModified.toLocaleString()}</p>}
+              </>
+            )}
+          </div>
 
-                <div className="text-xs text-gray-600 bg-gray-50 border rounded-lg px-3 py-2 space-y-0.5">
-                  <p className="font-medium text-gray-700">Live now</p>
-                  {l === undefined && <p>Checking...</p>}
-                  {l === 'error' && <p>Could not check (R2 CORS must allow HEAD requests).</p>}
-                  {l && l !== 'error' && (
-                    l.info === null
-                      ? <p>Nothing uploaded yet.</p>
-                      : <>
-                          <p>
-                            {formatSize(l.info.size)}
-                            {l.count !== undefined && ` - ${l.count} movies`}
-                          </p>
-                          {l.info.lastModified && <p>Updated {l.info.lastModified.toLocaleString()}</p>}
-                        </>
-                  )}
-                </div>
+          <Button onClick={() => void checkForChanges()} loading={checking} disabled={busy}>
+            <RefreshCw className="w-4 h-4 mr-1.5" /> Check for updates
+          </Button>
 
-                {justUpdated[slot.key] && (
-                  <p className="flex items-center gap-1.5 text-sm text-green-700">
-                    <CheckCircle2 className="w-4 h-4" /> Updated. Apps will fetch it on their next open.
-                  </p>
-                )}
+          {upToDate && (
+            <>
+              <p className="flex items-center gap-1.5 text-sm text-green-700">
+                <CheckCircle2 className="w-4 h-4" /> The JSON file already matches Firebase. Nothing to update, nothing was uploaded.
+              </p>
+              {synced && <AppWillShow file={synced} />}
+            </>
+          )}
 
-                {p && (
-                  <div className="border rounded-lg px-3 py-2 space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm text-gray-800 truncate">
-                        {p.fileName} <span className="text-xs text-gray-400">({formatSize(p.size)})</span>
-                      </p>
-                      <button
-                        type="button"
-                        title="Discard this file"
-                        onClick={() => clear(slot)}
-                        disabled={isBusy}
-                        className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-gray-100 disabled:opacity-40"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
+          {justPublished && (
+            <p className="flex items-center gap-1.5 text-sm text-green-700">
+              <CheckCircle2 className="w-4 h-4" /> Updated. Apps will fetch the new file the next time they open.
+            </p>
+          )}
 
-                    {p.summary && (
-                      <div className="text-xs text-gray-600 space-y-0.5">
-                        <p>{p.summary.valid} usable movies{p.summary.skipped > 0 && ` (${p.summary.skipped} skipped: missing id or title)`}</p>
-                        <p>{p.summary.homeEligible} qualify for Home (rating above {HOME_MIN_RATING})</p>
-                        {p.summary.duplicates > 0 && <p className="text-amber-700">{p.summary.duplicates} duplicate ids found</p>}
-                        <p className="text-gray-400 truncate">e.g. {p.summary.sampleTitles.join(', ')}</p>
-                      </div>
-                    )}
+          {error && (
+            <p className="flex items-start gap-1.5 text-sm text-red-600">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> {error}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
-                    {looksSmaller && (
-                      <p className="flex items-start gap-1.5 text-xs text-amber-700">
-                        <AlertTriangle className="w-4 h-4 shrink-0" />
-                        This file has less than half the movies of the live one ({liveCount}). Make sure it is the right file.
-                      </p>
-                    )}
+      {preview && (
+        <Card>
+          <CardContent className="pt-6 space-y-3">
+            <p className="font-semibold text-gray-900">The JSON file is out of date. Changes found:</p>
 
-                    {p.error && (
-                      <p className="flex items-start gap-1.5 text-sm text-red-600">
-                        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> {p.error}
-                      </p>
-                    )}
-                  </div>
-                )}
+            <p className="text-sm text-gray-700">
+              New file: <b>{preview.build.file.movies.length}</b> movies
+              {preview.live && <> (live now: {preview.live.movies.length})</>}
+              {' '}- {formatSize(new TextEncoder().encode(preview.text).length)}
+            </p>
 
-                <div className="flex gap-2">
-                  <label className={`inline-flex items-center px-3 h-9 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-indigo-500 hover:text-indigo-600 ${isBusy ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
-                    Choose JSON file
-                    <input
-                      type="file"
-                      accept=".json,application/json"
-                      className="hidden"
-                      onChange={e => { void choose(slot, e.target.files?.[0]); e.target.value = '' }}
-                    />
-                  </label>
-                  <Button size="sm" onClick={() => void replace(slot)} disabled={!p?.text || isBusy} loading={isBusy}>
-                    <Upload className="w-4 h-4 mr-1.5" /> Replace live file
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
+            <TitleList label="New" titles={preview.diff.added.map(m => m.title)} tone="text-green-700" />
+            <TitleList label="Changed" titles={preview.diff.updated.map(m => m.title)} tone="text-indigo-700" />
+            <TitleList label="Removed (deleted or paused)" titles={preview.diff.removed.map(m => m.title)} tone="text-red-700" />
+            {preview.diff.categoriesChanged && <p className="text-sm text-indigo-700">Categories changed</p>}
+            {preview.diff.trendingChanged && <p className="text-sm text-indigo-700">Trending list changed</p>}
+
+            {preview.build.skippedIncomplete.length > 0 && (
+              <p className="flex items-start gap-1.5 text-xs text-amber-700">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                Left out (no title or no video file yet): {preview.build.skippedIncomplete.slice(0, 8).join(', ')}
+              </p>
+            )}
+            {preview.build.noCategory.length > 0 && (
+              <p className="flex items-start gap-1.5 text-xs text-amber-700">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                Category missing, so these show in Search but on no Home shelf: {preview.build.noCategory.slice(0, 8).join(', ')}
+              </p>
+            )}
+
+            <AppWillShow file={preview.build.file} />
+
+            <div className="flex gap-2 pt-1">
+              <Button onClick={() => void publish()} loading={publishing} disabled={busy}>
+                <Upload className="w-4 h-4 mr-1.5" /> Update JSON file
+              </Button>
+              <Button variant="secondary" onClick={() => setPreview(null)} disabled={busy}>
+                Cancel
+              </Button>
+            </div>
+            <p className="text-xs text-gray-400">
+              The previous file is kept as <span className="font-mono">{CATALOGUE_BACKUP_KEY}</span> in case you need to go back.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

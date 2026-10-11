@@ -40,6 +40,7 @@ export interface RedemptionCode {
   usedAt?: string
   movieId?: string
   createdAt: string
+  updatedAt?: string
 }
 
 export interface AppUser {
