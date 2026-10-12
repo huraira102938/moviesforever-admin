@@ -69,6 +69,10 @@ export interface Banner {
   imageUrl: string
   clickable: boolean
   linkedMovieId?: string
+  /** What a tap does: 'movie' | 'link' | 'whatsapp' | 'channel' | 'none'. Missing on old banners. */
+  actionType?: 'movie' | 'link' | 'whatsapp' | 'channel' | 'none'
+  /** URL for 'link' / 'channel', phone number (with country code) for 'whatsapp'. */
+  actionValue?: string
   order: number
 }
 

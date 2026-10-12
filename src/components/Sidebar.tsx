@@ -13,6 +13,7 @@ import {
   Bell,
   Flame,
   FileJson,
+  ShieldAlert,
   X,
 } from 'lucide-react'
 
@@ -33,10 +34,11 @@ const navItems = [
   { to: '/notifications', icon: Bell, label: 'Notifications', group: 'Settings' },
   { to: '/payment-details', icon: CreditCard, label: 'Payment Details', group: 'Settings' },
   { to: '/contact-details', icon: CreditCard, label: 'Contact Details', group: 'Settings' },
+  { to: '/force-update', icon: ShieldAlert, label: 'Force Update', group: 'App Control' },
   { to: '/pricing', icon: Settings, label: 'Pricing Settings', group: 'Settings' },
 ]
 
-const groupOrder = ['Main', 'Content', 'Users & Codes', 'Settings']
+const groupOrder = ['Main', 'Content', 'Users & Codes', 'App Control', 'Settings']
 
 interface SidebarProps {
   open: boolean

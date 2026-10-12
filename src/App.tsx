@@ -14,6 +14,7 @@ import BannerManager from './pages/BannerManager'
 import PricingSettings from './pages/PricingSettings'
 import PaymentDetails from './pages/PaymentDetails'
 import ContactDetails from './pages/ContactDetails'
+import ForceUpdate from './pages/ForceUpdate'
 import Notifications from './pages/Notifications'
 import Trending from './pages/Trending'
 import AppSharing from './pages/AppSharing'
@@ -42,6 +43,7 @@ function App() {
           <Route path="contact-details" element={<ContactDetails />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="trending" element={<Trending />} />
+          <Route path="force-update" element={<ForceUpdate />} />
           <Route path="json-data" element={<JsonDataManager />} />
         </Route>
       </Routes>
