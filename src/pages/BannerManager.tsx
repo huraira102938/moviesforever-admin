@@ -165,6 +165,7 @@ export default function BannerManager() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Banner Management</h1>
         <p className="text-sm text-gray-500 mt-1">Upload and manage home screen banners. A banner can open a movie, a website, a WhatsApp chat or a WhatsApp channel.</p>
+        <p className="text-sm text-amber-700 mt-1">Only the first 5 banners (by order) are shown in the app. After any change here, open <b>Movie Data (JSON)</b> and press the update button - the app reads banners from that file.</p>
       </div>
 
       <div className="bg-white rounded-xl border p-6 space-y-5">

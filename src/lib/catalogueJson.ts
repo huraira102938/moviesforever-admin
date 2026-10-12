@@ -1,7 +1,7 @@
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from './firebase'
 import { getMovies, invalidateMovies } from './moviesCache'
-import type { Category, Movie, TrendingItem } from './types'
+import type { Banner, Category, Movie, TrendingItem } from './types'
 
 /**
  * movies.json -- the single catalogue file the Android app reads (it never reads movies from Firestore).
@@ -18,6 +18,20 @@ export const CATALOGUE_KEY = 'movies.json'
 export const CATALOGUE_BACKUP_KEY = 'movies.prev.json'
 
 export const CATALOGUE_VERSION = 1
+
+/** The app shows at most this many banners; the rest are left out of the file. */
+export const MAX_BANNERS = 5
+
+export interface CatalogueBanner {
+  id: string
+  imageUrl: string
+  imageKey: string
+  clickable: boolean
+  linkedMovieId: string | null
+  actionType: string
+  actionValue: string
+  order: number
+}
 
 export interface CatalogueMovie {
   id: string
@@ -54,6 +68,7 @@ export interface CatalogueFile {
   generatedAt: string
   categories: CatalogueCategory[]
   trending: string[] // movie ids in display order
+  banners: CatalogueBanner[]
   movies: CatalogueMovie[]
 }
 
@@ -92,12 +107,26 @@ export function normalizeMovie(raw: any): CatalogueMovie {
   }
 }
 
+export function normalizeBanner(raw: any): CatalogueBanner {
+  return {
+    id: str(raw?.id),
+    imageUrl: str(raw?.imageUrl),
+    imageKey: str(raw?.imageKey),
+    clickable: raw?.clickable === true,
+    linkedMovieId: strOrNull(raw?.linkedMovieId),
+    actionType: str(raw?.actionType),
+    actionValue: str(raw?.actionValue),
+    order: typeof raw?.order === 'number' ? raw.order : 0,
+  }
+}
+
 const sig = (m: CatalogueMovie) => JSON.stringify(m)
 
 export interface Sources {
   movies: Movie[]
   categories: Category[]
   trending: TrendingItem[]
+  banners: Banner[]
 }
 
 /**
@@ -107,15 +136,17 @@ export interface Sources {
  */
 export async function loadSources(): Promise<Sources> {
   invalidateMovies()
-  const [movies, catSnap, trendSnap] = await Promise.all([
+  const [movies, catSnap, trendSnap, bannerSnap] = await Promise.all([
     getMovies(),
     getDocs(collection(db, 'categories')),
     getDocs(collection(db, 'trending')),
+    getDocs(collection(db, 'banners')),
   ])
   return {
     movies,
     categories: catSnap.docs.map(d => ({ id: d.id, ...d.data() } as Category)),
     trending: trendSnap.docs.map(d => ({ id: d.id, ...d.data() } as TrendingItem)),
+    banners: bannerSnap.docs.map(d => ({ id: d.id, ...d.data() } as Banner)),
   }
 }
 
@@ -157,8 +188,15 @@ export function buildCatalogue(src: Sources, generatedAt = new Date().toISOStrin
     .map(t => t.movieId)
     .filter((id, i, all) => published.has(id) && all.indexOf(id) === i)
 
+  // Home banners: in the admin's order, only those with an image, at most MAX_BANNERS.
+  const banners = src.banners
+    .map(normalizeBanner)
+    .filter(b => b.imageUrl)
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+    .slice(0, MAX_BANNERS)
+
   return {
-    file: { version: CATALOGUE_VERSION, generatedAt, categories, trending, movies },
+    file: { version: CATALOGUE_VERSION, generatedAt, categories, trending, banners, movies },
     skippedIncomplete,
     pausedCount,
     noCategory,
@@ -178,6 +216,7 @@ export function parseCatalogue(text: string | null): CatalogueFile | null {
         ? data.categories.map((c: any) => ({ id: str(c?.id), name: str(c?.name), order: typeof c?.order === 'number' ? c.order : 0 }))
         : [],
       trending: strList(data.trending),
+      banners: Array.isArray(data.banners) ? data.banners.map(normalizeBanner) : [],
       movies: data.movies.map(normalizeMovie).filter((m: CatalogueMovie) => m.id),
     }
   } catch {
@@ -191,6 +230,7 @@ export interface CatalogueDiff {
   removed: CatalogueMovie[] // taken from the live file
   categoriesChanged: boolean
   trendingChanged: boolean
+  bannersChanged: boolean
   hasChanges: boolean
 }
 
@@ -211,13 +251,16 @@ export function diffCatalogue(live: CatalogueFile | null, next: CatalogueFile): 
   const categoriesChanged = JSON.stringify(live?.categories ?? []) !== JSON.stringify(next.categories)
   const trendingChanged = JSON.stringify(live?.trending ?? []) !== JSON.stringify(next.trending)
 
+  const bannersChanged = JSON.stringify(live?.banners ?? []) !== JSON.stringify(next.banners)
+
   return {
     added,
     updated,
     removed,
     categoriesChanged,
     trendingChanged,
-    hasChanges: added.length > 0 || updated.length > 0 || removed.length > 0 || categoriesChanged || trendingChanged,
+    bannersChanged,
+    hasChanges: added.length > 0 || updated.length > 0 || removed.length > 0 || categoriesChanged || trendingChanged || bannersChanged,
   }
 }
 

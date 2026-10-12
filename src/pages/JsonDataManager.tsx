@@ -247,6 +247,7 @@ export default function JsonDataManager() {
             <TitleList label="Removed (deleted or paused)" titles={preview.diff.removed.map(m => m.title)} tone="text-red-700" />
             {preview.diff.categoriesChanged && <p className="text-sm text-indigo-700">Categories changed</p>}
             {preview.diff.trendingChanged && <p className="text-sm text-indigo-700">Trending list changed</p>}
+            {preview.diff.bannersChanged && <p className="text-sm text-indigo-700">Banners changed</p>}
 
             {preview.build.skippedIncomplete.length > 0 && (
               <p className="flex items-start gap-1.5 text-xs text-amber-700">
