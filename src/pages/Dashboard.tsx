@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { collection, getCountFromServer, getDoc, doc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { recordInstallSnapshot } from '../lib/installStats'
 import { Film, Users, Ticket, Image as ImageIcon, Settings, Layers, Tag, Download } from 'lucide-react'
 
 interface StatCardProps {
@@ -51,6 +52,8 @@ export default function Dashboard() {
           banners: bannersSnap.data().count,
           installs: installsSnap.exists() ? (installsSnap.data().installCount || 0) : 0,
         })
+        // save today's install snapshot for the date-wise report (never blocks the dashboard)
+        recordInstallSnapshot(installsSnap.exists() ? (installsSnap.data().installCount || 0) : 0).catch(console.error)
       } catch (err) {
         console.error('Failed to fetch counts:', err)
       } finally {
@@ -81,7 +84,7 @@ export default function Dashboard() {
         <StatCard label="Redemption Codes" count={counts.codes} icon={<Ticket className="w-6 h-6 text-purple-600" />} color="bg-purple-50" to="/codes" />
         <StatCard label="Users" count={counts.users} icon={<Users className="w-6 h-6 text-blue-600" />} color="bg-blue-50" to="/users" />
         <StatCard label="Banners" count={counts.banners} icon={<ImageIcon className="w-6 h-6 text-pink-600" />} color="bg-pink-50" to="/banners" />
-        <StatCard label="Installs" count={counts.installs} icon={<Download className="w-6 h-6 text-cyan-600" />} color="bg-cyan-50" to="/" />
+        <StatCard label="Installs" count={counts.installs} icon={<Download className="w-6 h-6 text-cyan-600" />} color="bg-cyan-50" to="/installs" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Link to="/movies/upload" className="block rounded-xl border bg-indigo-600 text-white p-5 shadow-sm hover:bg-indigo-700 transition-colors">

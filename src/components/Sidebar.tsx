@@ -14,11 +14,13 @@ import {
   Flame,
   FileJson,
   ShieldAlert,
+  Download,
   X,
 } from 'lucide-react'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', group: 'Main' },
+  { to: '/installs', icon: Download, label: 'Installs', group: 'Main' },
   { to: '/movies/upload', icon: Film, label: 'Upload Movie', group: 'Content' },
   { to: '/movies/list', icon: FolderOpen, label: 'All Movies', group: 'Content' },
   { to: '/categories', icon: FolderOpen, label: 'Categories', group: 'Content' },

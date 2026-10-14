@@ -19,6 +19,7 @@ import Notifications from './pages/Notifications'
 import Trending from './pages/Trending'
 import AppSharing from './pages/AppSharing'
 import JsonDataManager from './pages/JsonDataManager'
+import Installs from './pages/Installs'
 
 function App() {
   return (
@@ -45,6 +46,7 @@ function App() {
           <Route path="trending" element={<Trending />} />
           <Route path="force-update" element={<ForceUpdate />} />
           <Route path="json-data" element={<JsonDataManager />} />
+          <Route path="installs" element={<Installs />} />
         </Route>
       </Routes>
     </BrowserRouter>
