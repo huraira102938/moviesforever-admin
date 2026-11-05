@@ -1,15 +1,14 @@
 import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
 import { db } from './firebase'
+import { buildInstallReport, type InstallReport, type InstallSnapshot } from './installReport'
 
 /**
  * Date-wise install tracking.
  *
  * The app only stores ONE running total (installs/counter -> installCount).
- * To get a per-date breakdown we save a snapshot of that total once per day
- * in the `installDaily` collection (doc id = YYYY-MM-DD, field endTotal).
- *
- *   installs on a day = endTotal(that day) - endTotal(previous day)
- *   first recorded day = everything counted so far (e.g. "today is 12 -> all installs are at 12")
+ * The Cloudflare Worker saves that total every hour in the `installDaily` collection
+ * (doc id = YYYY-MM-DD); see installReport.ts for how the numbers are worked out.
+ * Opening the panel only refreshes today's latest total.
  */
 
 const TIMEZONE = 'Asia/Karachi'
@@ -21,12 +20,6 @@ const dayFmt = new Intl.DateTimeFormat('en-CA', {
 })
 
 export const todayKey = () => dayFmt.format(new Date())
-
-export interface InstallDay {
-  date: string
-  installs: number
-  runningTotal: number
-}
 
 export async function getInstallTotal(): Promise<number> {
   const snap = await getDoc(doc(db, 'installs', 'counter'))
@@ -43,16 +36,12 @@ export async function recordInstallSnapshot(total: number): Promise<void> {
   )
 }
 
-/** Reads all snapshots and returns the date-wise breakdown (oldest first). */
-export async function getInstallDays(): Promise<InstallDay[]> {
+export async function getInstallReport(liveTotal: number): Promise<InstallReport> {
   const snap = await getDocs(collection(db, 'installDaily'))
-  const snaps = snap.docs
-    .map(d => ({ date: d.id, endTotal: Number(d.data().endTotal) || 0 }))
-    .sort((a, b) => a.date.localeCompare(b.date))
-
-  return snaps.map((s, i) => ({
-    date: s.date,
-    installs: i === 0 ? s.endTotal : Math.max(0, s.endTotal - snaps[i - 1].endTotal),
-    runningTotal: s.endTotal,
-  }))
+  const snapshots = snap.docs.map(d => ({
+    ...d.data(),
+    date: d.id,
+    endTotal: Number(d.data().endTotal) || 0,
+  }) as InstallSnapshot)
+  return buildInstallReport(snapshots, liveTotal, Date.now())
 }
