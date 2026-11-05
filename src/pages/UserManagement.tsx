@@ -156,8 +156,8 @@ export default function UserManagement() {
         </select>
       </div>
 
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-xl border overflow-x-auto">
+        <table className="w-full min-w-[820px] text-sm">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-500">User ID</th>
@@ -348,7 +348,7 @@ function DetailPanel({
       {rTxns.length === 0 ? (
         <p className="text-sm text-gray-400">No referral transactions yet.</p>
       ) : (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>

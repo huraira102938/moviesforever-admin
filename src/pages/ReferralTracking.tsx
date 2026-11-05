@@ -73,11 +73,11 @@ export default function ReferralTracking() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border overflow-hidden">
+      <div className="bg-white rounded-xl border overflow-x-auto">
         <div className="px-4 py-3 border-b bg-gray-50">
           <h3 className="font-semibold text-gray-900">All Referral Claims</h3>
         </div>
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[520px] text-sm">
           <thead className="border-b">
             <tr>
               <th className="text-left px-4 py-2.5 font-medium text-gray-500">Referrer</th>

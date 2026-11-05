@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { collection, getCountFromServer, getDoc, doc } from 'firebase/firestore'
+import { collection, getAggregateFromServer, getCountFromServer, getDoc, doc, sum } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { recordInstallSnapshot } from '../lib/installStats'
-import { Film, Users, Ticket, Image as ImageIcon, Settings, Layers, Tag, Download } from 'lucide-react'
+import { Film, Users, Ticket, Image as ImageIcon, Settings, Layers, Tag, Download, Wallet } from 'lucide-react'
 
 interface StatCardProps {
   label: string
-  count: number
+  count: number | string
   icon: React.ReactNode
   color: string
   to: string
@@ -29,12 +29,14 @@ function StatCard({ label, count, icon, color, to }: StatCardProps) {
 
 export default function Dashboard() {
   const [counts, setCounts] = useState({ movies: 0, categories: 0, genres: 0, codes: 0, users: 0, banners: 0, installs: 0 })
+  // null = could not be loaded; the other cards still show
+  const [revenue, setRevenue] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchCounts() {
       try {
-        const [moviesSnap, categoriesSnap, genresSnap, codesSnap, usersSnap, bannersSnap, installsSnap] = await Promise.all([
+        const [moviesSnap, categoriesSnap, genresSnap, codesSnap, usersSnap, bannersSnap, installsSnap, revenueSnap] = await Promise.all([
           getCountFromServer(collection(db, 'movies')),
           getCountFromServer(collection(db, 'categories')),
           getCountFromServer(collection(db, 'genres')),
@@ -42,6 +44,11 @@ export default function Dashboard() {
           getCountFromServer(collection(db, 'users')),
           getCountFromServer(collection(db, 'banners')),
           getDoc(doc(db, 'installs', 'counter')),
+          // Summed by Firestore, so this does not read every transaction on each dashboard open.
+          getAggregateFromServer(collection(db, 'transactions'), { total: sum('totalReceived') }).catch(err => {
+            console.error('Failed to fetch revenue:', err)
+            return null
+          }),
         ])
         setCounts({
           movies: moviesSnap.data().count,
@@ -52,6 +59,7 @@ export default function Dashboard() {
           banners: bannersSnap.data().count,
           installs: installsSnap.exists() ? (installsSnap.data().installCount || 0) : 0,
         })
+        setRevenue(revenueSnap ? revenueSnap.data().total : null)
         // save today's install snapshot for the date-wise report (never blocks the dashboard)
         recordInstallSnapshot(installsSnap.exists() ? (installsSnap.data().installCount || 0) : 0).catch(console.error)
       } catch (err) {
@@ -78,6 +86,13 @@ export default function Dashboard() {
         <p className="text-sm text-gray-500 mt-1">Overview of your MoviesForever admin panel</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard
+          label="Total Revenue Collected"
+          count={revenue === null ? '—' : `PKR ${revenue.toLocaleString()}`}
+          icon={<Wallet className="w-6 h-6 text-green-600" />}
+          color="bg-green-50"
+          to="/users"
+        />
         <StatCard label="Total Movies" count={counts.movies} icon={<Film className="w-6 h-6 text-indigo-600" />} color="bg-indigo-50" to="/movies/list" />
         <StatCard label="Categories" count={counts.categories} icon={<Layers className="w-6 h-6 text-emerald-600" />} color="bg-emerald-50" to="/categories" />
         <StatCard label="Genres" count={counts.genres} icon={<Tag className="w-6 h-6 text-amber-600" />} color="bg-amber-50" to="/genres" />

@@ -105,7 +105,7 @@ export default function ContactDetails() {
         <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
           <p>WhatsApp Number: <strong>{whatsappNumber.trim() || '—'}</strong></p>
           <p>Group Title: <strong>{groupTitle.trim() || '—'}</strong></p>
-          <p>Group Link: <strong>{groupLink.trim() || '—'}</strong></p>
+          <p className="break-all">Group Link: <strong>{groupLink.trim() || '—'}</strong></p>
         </div>
       </div>
     </div>

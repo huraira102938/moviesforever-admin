@@ -246,7 +246,7 @@ export default function BannerManager() {
           const action = bannerAction(banner)
           const actionLabel = ACTIONS.find(a => a.value === action)?.label ?? 'Not clickable'
           return (
-            <div key={banner.id} className="bg-white rounded-xl border p-4 flex items-center gap-4">
+            <div key={banner.id} className="bg-white rounded-xl border p-4 flex flex-wrap items-center gap-4">
               <div className="flex flex-col gap-0.5">
                 <button onClick={() => handleMove(banner, 'up')} disabled={idx === 0}
                   className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-20 disabled:cursor-not-allowed text-gray-400 hover:text-gray-700">
@@ -258,8 +258,8 @@ export default function BannerManager() {
                 </button>
               </div>
               <span className="text-xs font-mono text-gray-400 w-6 text-center bg-gray-50 rounded py-1">{banner.order ?? idx}</span>
-              {banner.imageUrl && <img src={banner.imageUrl} alt="" className="w-40 h-20 rounded-lg object-cover border" />}
-              <div className="flex-1">
+              {banner.imageUrl && <img src={banner.imageUrl} alt="" className="w-40 max-w-full h-20 rounded-lg object-cover border" />}
+              <div className="flex-1 min-w-[160px]">
                 <Badge variant={action !== 'none' ? 'info' : 'default'}>{actionLabel}</Badge>
                 {action === 'movie' && linkedMovie && <span className="ml-2 text-sm text-gray-500">→ {linkedMovie.title}</span>}
                 {action === 'movie' && !linkedMovie && <span className="ml-2 text-sm text-red-500">→ movie not found</span>}

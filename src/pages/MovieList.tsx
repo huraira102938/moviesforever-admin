@@ -90,7 +90,7 @@ export default function MovieList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">All Movies</h1>
           <p className="text-sm text-gray-500 mt-1">{movies.length} total movies</p>
@@ -133,8 +133,8 @@ export default function MovieList() {
         </select>
       </div>
 
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-xl border overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-500">Movie</th>
