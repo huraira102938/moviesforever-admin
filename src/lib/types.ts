@@ -37,6 +37,7 @@ export interface RedemptionCode {
   id: string
   username: string
   status: 'unused' | 'used'
+  market?: string
   usedAt?: string
   movieId?: string
   createdAt: string
@@ -45,6 +46,7 @@ export interface RedemptionCode {
 
 export interface AppUser {
   id: string
+  market?: string
   username: string
   realName: string
   phoneNumber: string
@@ -90,6 +92,7 @@ export interface PricingSettings {
 
 export interface PaymentTransaction {
   id: string
+  market?: string
   clientUserId: string
   clientUsername: string
   clientRealName: string
@@ -107,12 +110,13 @@ export interface PaymentTransaction {
   paidAt?: string
 }
 
-export type NotificationTarget = 'free' | 'paid' | 'paused'
+export type NotificationTarget = 'free' | 'paid' | 'paused' | 'uae_free' | 'uae_paid' | 'uae_paused'
 
 export type PushStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'expired'
 
 export interface AppNotification {
   id: string
+  market?: string
   text: string
   targets: NotificationTarget[]
   createdAt: string

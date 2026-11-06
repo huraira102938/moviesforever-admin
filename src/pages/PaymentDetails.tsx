@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { isUae, marketDocId } from '../lib/market'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Label from '../components/Label'
 import { toast } from 'sonner'
 import { Save } from 'lucide-react'
 
-const SETTINGS_DOC_ID = 'payment-details'
+const SETTINGS_DOC_ID = marketDocId('payment-details')
 
 export default function PaymentDetails() {
   const [bankName, setBankName] = useState('')
@@ -40,7 +41,7 @@ export default function PaymentDetails() {
   async function handleSave() {
     if (!bankName.trim()) return toast.error('Enter the bank name')
     if (!accountTitle.trim()) return toast.error('Enter the account title')
-    if (!accountNumber.trim()) return toast.error('Enter the account number')
+    if (!accountNumber.trim()) return toast.error(isUae ? 'Enter the IBAN' : 'Enter the account number')
 
     setSaving(true)
     try {
@@ -88,7 +89,7 @@ export default function PaymentDetails() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Account Number *</Label>
+            <Label>{isUae ? 'IBAN *' : 'Account Number *'}</Label>
             <Input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="e.g. 01020304050607" />
           </div>
         </div>

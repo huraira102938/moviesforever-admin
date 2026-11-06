@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { isUae } from '../lib/market'
 import { getMovies } from '../lib/moviesCache'
 import type { TrendingItem, Movie } from '../lib/types'
 import Button from '../components/Button'
@@ -10,7 +11,14 @@ import { Trash2, ChevronUp, ChevronDown, Flame } from 'lucide-react'
 import ConfirmModal from '../components/ConfirmModal'
 import MovieSearchSelect from '../components/MovieSearchSelect'
 
-export default function Trending() {
+/**
+ * One ordered movie list. Pakistan's free movies stay the "Free movie" tick on each movie, so the
+ * Free list only exists for the UAE.
+ */
+export default function Trending({ list = 'trending' }: { list?: 'trending' | 'free' }) {
+  const isFree = list === 'free'
+  const collectionName = isFree ? 'free-uae' : isUae ? 'trending-uae' : 'trending'
+  const listName = isFree ? 'Free Movies' : 'Trending'
   const [items, setItems] = useState<TrendingItem[]>([])
   const [movies, setMovies] = useState<Movie[]>([])
   const [loading, setLoading] = useState(true)
@@ -22,7 +30,7 @@ export default function Trending() {
   async function loadData() {
     try {
       const [trendingSnap, movieList] = await Promise.all([
-        getDocs(collection(db, 'trending')),
+        getDocs(collection(db, collectionName)),
         getMovies(),
       ])
       setItems(trendingSnap.docs.map(d => ({ id: d.id, ...d.data() } as TrendingItem)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)))
@@ -41,17 +49,17 @@ export default function Trending() {
 
   async function handleAdd() {
     if (!selectedMovieId) return toast.error('Select a movie to add')
-    if (items.some(i => i.movieId === selectedMovieId)) return toast.error('This movie is already in the trending list')
+    if (items.some(i => i.movieId === selectedMovieId)) return toast.error(`This movie is already in ${listName}`)
 
     setSaving(true)
     try {
-      const docRef = await addDoc(collection(db, 'trending'), {
+      const docRef = await addDoc(collection(db, collectionName), {
         movieId: selectedMovieId,
         order: nextOrder,
       })
       setItems(prev => [...prev, { id: docRef.id, movieId: selectedMovieId, order: nextOrder } as TrendingItem].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)))
       setSelectedMovieId('')
-      toast.success('Movie added to trending')
+      toast.success(`Movie added to ${listName}`)
     } catch (err) {
       toast.error('Failed to add movie')
     } finally {
@@ -70,8 +78,8 @@ export default function Trending() {
 
     try {
       await Promise.all([
-        updateDoc(doc(db, 'trending', item.id), { order: other.order }),
-        updateDoc(doc(db, 'trending', other.id), { order: item.order }),
+        updateDoc(doc(db, collectionName, item.id), { order: other.order }),
+        updateDoc(doc(db, collectionName, other.id), { order: item.order }),
       ])
       setItems(prev => prev.map(i => {
         if (i.id === item.id) return { ...i, order: other.order }
@@ -86,9 +94,9 @@ export default function Trending() {
   async function handleDelete() {
     if (!deleteTarget) return
     try {
-      await deleteDoc(doc(db, 'trending', deleteTarget.id))
+      await deleteDoc(doc(db, collectionName, deleteTarget.id))
       setItems(prev => prev.filter(i => i.id !== deleteTarget.id))
-      toast.success('Movie removed from trending')
+      toast.success(`Movie removed from ${listName}`)
     } catch (err) {
       toast.error('Failed to remove')
     } finally {
@@ -103,14 +111,14 @@ export default function Trending() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Trending</h1>
-        <p className="text-sm text-gray-500 mt-1">Curate the trending movie shelf shown in the app</p>
+        <h1 className="text-2xl font-bold text-gray-900">{listName}</h1>
+        <p className="text-sm text-gray-500 mt-1">{isFree ? 'Movies UAE users can watch for free' : 'Curate the trending movie shelf shown in the app'}</p>
       </div>
 
       <div className="bg-white rounded-xl border p-6 space-y-5">
         <div className="flex items-center gap-2 text-orange-600 bg-orange-50 rounded-lg p-3">
           <Flame className="w-5 h-5" />
-          <p className="text-sm">Movies appear in this exact order in the trending section.</p>
+          <p className="text-sm">Movies appear in this exact order in the app. Update the Movie Data (JSON) file after changing this list.</p>
         </div>
 
         <div className="space-y-1.5">
@@ -119,7 +127,7 @@ export default function Trending() {
             <div className="flex-1">
               <MovieSearchSelect movies={movies} value={selectedMovieId} onChange={setSelectedMovieId} placeholder="Search and select a movie" />
             </div>
-            <Button onClick={handleAdd} loading={saving} disabled={!selectedMovieId}>Add to Trending</Button>
+            <Button onClick={handleAdd} loading={saving} disabled={!selectedMovieId}>Add to {listName}</Button>
           </div>
         </div>
 

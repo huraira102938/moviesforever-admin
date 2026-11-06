@@ -1,4 +1,5 @@
 import { collection, getDocs } from 'firebase/firestore'
+import { bannersCollection, isUae } from './market'
 import { db } from './firebase'
 import { getMovies, invalidateMovies } from './moviesCache'
 import type { Banner, Category, Movie, TrendingItem } from './types'
@@ -12,15 +13,18 @@ import type { Banner, Category, Movie, TrendingItem } from './types'
  *
  * The key MUST match `CatalogueConfig.FILE_NAME` in the Android app (data/remote/CatalogueConfig.kt).
  */
-export const CATALOGUE_KEY = 'movies.json'
+export const CATALOGUE_KEY = isUae ? 'movies-uae.json' : 'movies.json'
 
 /** Copy of the previous live file, kept so a bad update can be rolled back by hand. */
-export const CATALOGUE_BACKUP_KEY = 'movies.prev.json'
+export const CATALOGUE_BACKUP_KEY = isUae ? 'movies-uae.prev.json' : 'movies.prev.json'
 
 export const CATALOGUE_VERSION = 1
 
 /** The app shows at most this many banners; the rest are left out of the file. */
 export const MAX_BANNERS = 5
+
+/** UAE Home shows these categories first, in this order. Any others follow in the admin's order. */
+const UAE_FIRST_CATEGORIES = ['Hollywood', 'Bollywood']
 
 export interface CatalogueBanner {
   id: string
@@ -67,6 +71,8 @@ export interface CatalogueFile {
   version: number
   generatedAt: string
   categories: CatalogueCategory[]
+  /** UAE only: the app builds Home shelves from genres, so it needs their names. */
+  genres?: { id: string; name: string }[]
   trending: string[] // movie ids in display order
   banners: CatalogueBanner[]
   movies: CatalogueMovie[]
@@ -125,7 +131,10 @@ const sig = (m: CatalogueMovie) => JSON.stringify(m)
 export interface Sources {
   movies: Movie[]
   categories: Category[]
+  genres?: { id: string; name: string }[]
   trending: TrendingItem[]
+  /** UAE only: the movies that are free there. Pakistan uses each movie's isFree tick. */
+  freeMovieIds?: string[]
   banners: Banner[]
 }
 
@@ -139,14 +148,18 @@ export async function loadSources(): Promise<Sources> {
   const [movies, catSnap, trendSnap, bannerSnap] = await Promise.all([
     getMovies(),
     getDocs(collection(db, 'categories')),
-    getDocs(collection(db, 'trending')),
-    getDocs(collection(db, 'banners')),
+    getDocs(collection(db, isUae ? 'trending-uae' : 'trending')),
+    getDocs(collection(db, bannersCollection)),
   ])
   return {
     movies,
     categories: catSnap.docs.map(d => ({ id: d.id, ...d.data() } as Category)),
     trending: trendSnap.docs.map(d => ({ id: d.id, ...d.data() } as TrendingItem)),
     banners: bannerSnap.docs.map(d => ({ id: d.id, ...d.data() } as Banner)),
+    freeMovieIds: isUae ? (await getDocs(collection(db, 'free-uae'))).docs.map(d => String(d.data().movieId)) : undefined,
+    genres: isUae
+      ? (await getDocs(collection(db, 'genres'))).docs.map(d => ({ id: d.id, name: str(d.data().name) })).sort((a, b) => a.name.localeCompare(b.name))
+      : undefined,
   }
 }
 
@@ -161,9 +174,17 @@ export interface BuildResult {
 }
 
 export function buildCatalogue(src: Sources, generatedAt = new Date().toISOString()): BuildResult {
-  const categories: CatalogueCategory[] = src.categories
+  const rank = (name: string) => {
+    const i = UAE_FIRST_CATEGORIES.indexOf(name)
+    return i === -1 ? UAE_FIRST_CATEGORIES.length : i
+  }
+  const sortedCategories = src.categories
     .map(c => ({ id: c.id, name: str(c.name), order: typeof c.order === 'number' ? c.order : 0 }))
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+  // The app shows shelves by `order`, so the UAE order has to be written into it.
+  const categories: CatalogueCategory[] = isUae
+    ? [...sortedCategories].sort((a, b) => rank(a.name) - rank(b.name)).map((c, order) => ({ ...c, order }))
+    : sortedCategories
   const categoryIds = new Set(categories.map(c => c.id))
 
   const skippedIncomplete: string[] = []
@@ -177,6 +198,11 @@ export function buildCatalogue(src: Sources, generatedAt = new Date().toISOStrin
     if (!m.id || !m.title.trim() || !m.videoUrl) { skippedIncomplete.push(m.title || m.id || '(untitled)'); continue }
     if (!categoryIds.has(m.category)) noCategory.push(m.title)
     movies.push(m)
+  }
+
+  if (src.freeMovieIds) {
+    const freeIds = new Set(src.freeMovieIds)
+    for (const m of movies) m.isFree = freeIds.has(m.id)
   }
 
   // Newest first; id as tie-breaker so the order (and the file) is identical on every run.
@@ -196,7 +222,7 @@ export function buildCatalogue(src: Sources, generatedAt = new Date().toISOStrin
     .slice(0, MAX_BANNERS)
 
   return {
-    file: { version: CATALOGUE_VERSION, generatedAt, categories, trending, banners, movies },
+    file: { version: CATALOGUE_VERSION, generatedAt, categories, ...(src.genres ? { genres: src.genres } : {}), trending, banners, movies },
     skippedIncomplete,
     pausedCount,
     noCategory,
@@ -215,6 +241,7 @@ export function parseCatalogue(text: string | null): CatalogueFile | null {
       categories: Array.isArray(data.categories)
         ? data.categories.map((c: any) => ({ id: str(c?.id), name: str(c?.name), order: typeof c?.order === 'number' ? c.order : 0 }))
         : [],
+      ...(Array.isArray(data.genres) ? { genres: data.genres } : {}),
       trending: strList(data.trending),
       banners: Array.isArray(data.banners) ? data.banners.map(normalizeBanner) : [],
       movies: data.movies.map(normalizeMovie).filter((m: CatalogueMovie) => m.id),
@@ -248,7 +275,9 @@ export function diffCatalogue(live: CatalogueFile | null, next: CatalogueFile): 
   }
   const removed = (live?.movies ?? []).filter(m => !nextIds.has(m.id))
 
-  const categoriesChanged = JSON.stringify(live?.categories ?? []) !== JSON.stringify(next.categories)
+  const categoriesChanged =
+    JSON.stringify(live?.categories ?? []) !== JSON.stringify(next.categories) ||
+    JSON.stringify(live?.genres ?? []) !== JSON.stringify(next.genres ?? [])
   const trendingChanged = JSON.stringify(live?.trending ?? []) !== JSON.stringify(next.trending)
 
   const bannersChanged = JSON.stringify(live?.banners ?? []) !== JSON.stringify(next.banners)

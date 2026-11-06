@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { marketDocId } from '../lib/market'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Label from '../components/Label'
 import { toast } from 'sonner'
 import { Save } from 'lucide-react'
 
-const SETTINGS_DOC_ID = 'contact'
+const SETTINGS_DOC_ID = marketDocId('contact')
 
 export default function ContactDetails() {
   const [whatsappNumber, setWhatsappNumber] = useState('')

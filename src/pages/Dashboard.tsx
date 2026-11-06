@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { collection, getAggregateFromServer, getCountFromServer, getDoc, doc, sum } from 'firebase/firestore'
+import { collection, getAggregateFromServer, getCountFromServer, getDoc, getDocs, doc, query, sum, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { bannersCollection, currency, isUae, marketDocId } from '../lib/market'
 import { recordInstallSnapshot } from '../lib/installStats'
 import { Film, Users, Ticket, Image as ImageIcon, Settings, Layers, Tag, Download, Wallet } from 'lucide-react'
 
@@ -11,6 +12,24 @@ interface StatCardProps {
   icon: React.ReactNode
   color: string
   to: string
+}
+
+const uaeOnly = (name: string) => query(collection(db, name), where('market', '==', 'uae'))
+
+/** Older documents have no market field, so Pakistan is everything minus the UAE ones. */
+async function countForMarket(name: string) {
+  const [all, uae] = await Promise.all([getCountFromServer(collection(db, name)), getCountFromServer(uaeOnly(name))])
+  return isUae ? uae.data().count : all.data().count - uae.data().count
+}
+
+async function revenueForMarket() {
+  // Summing with a market filter would need a Firestore index, so the UAE payments are added up here.
+  const [all, uae] = await Promise.all([
+    getAggregateFromServer(collection(db, 'transactions'), { total: sum('totalReceived') }),
+    getDocs(uaeOnly('transactions')),
+  ])
+  const uaeTotal = uae.docs.reduce((total, d) => total + (Number(d.data().totalReceived) || 0), 0)
+  return isUae ? uaeTotal : all.data().total - uaeTotal
 }
 
 function StatCard({ label, count, icon, color, to }: StatCardProps) {
@@ -40,12 +59,12 @@ export default function Dashboard() {
           getCountFromServer(collection(db, 'movies')),
           getCountFromServer(collection(db, 'categories')),
           getCountFromServer(collection(db, 'genres')),
-          getCountFromServer(collection(db, 'codes')),
-          getCountFromServer(collection(db, 'users')),
-          getCountFromServer(collection(db, 'banners')),
-          getDoc(doc(db, 'installs', 'counter')),
+          countForMarket('codes'),
+          countForMarket('users'),
+          getCountFromServer(collection(db, bannersCollection)),
+          getDoc(doc(db, 'installs', marketDocId('counter'))),
           // Summed by Firestore, so this does not read every transaction on each dashboard open.
-          getAggregateFromServer(collection(db, 'transactions'), { total: sum('totalReceived') }).catch(err => {
+          revenueForMarket().catch(err => {
             console.error('Failed to fetch revenue:', err)
             return null
           }),
@@ -54,12 +73,12 @@ export default function Dashboard() {
           movies: moviesSnap.data().count,
           categories: categoriesSnap.data().count,
           genres: genresSnap.data().count,
-          codes: codesSnap.data().count,
-          users: usersSnap.data().count,
+          codes: codesSnap,
+          users: usersSnap,
           banners: bannersSnap.data().count,
           installs: installsSnap.exists() ? (installsSnap.data().installCount || 0) : 0,
         })
-        setRevenue(revenueSnap ? revenueSnap.data().total : null)
+        setRevenue(revenueSnap)
         // save today's install snapshot for the date-wise report (never blocks the dashboard)
         recordInstallSnapshot(installsSnap.exists() ? (installsSnap.data().installCount || 0) : 0).catch(console.error)
       } catch (err) {
@@ -88,7 +107,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           label="Total Revenue Collected"
-          count={revenue === null ? '—' : `PKR ${revenue.toLocaleString()}`}
+          count={revenue === null ? '—' : `${currency} ${revenue.toLocaleString()}`}
           icon={<Wallet className="w-6 h-6 text-green-600" />}
           color="bg-green-50"
           to="/users"

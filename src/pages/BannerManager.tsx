@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { bannersCollection } from '../lib/market'
 import { getMovies } from '../lib/moviesCache'
 import type { Banner, Movie } from '../lib/types'
 import FileUploader from '../components/FileUploader'
@@ -55,7 +56,7 @@ export default function BannerManager() {
   async function loadData() {
     try {
       const [bannerSnap, movieList] = await Promise.all([
-        getDocs(collection(db, 'banners')),
+        getDocs(collection(db, bannersCollection)),
         getMovies(),
       ])
       setBanners(bannerSnap.docs.map(d => ({ id: d.id, ...d.data() } as Banner)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)))
@@ -94,7 +95,7 @@ export default function BannerManager() {
     const movieId = actionType === 'movie' ? linkedMovieId : null
     setSaving(true)
     try {
-      const docRef = await addDoc(collection(db, 'banners'), {
+      const docRef = await addDoc(collection(db, bannersCollection), {
         imageKey,
         imageUrl,
         clickable,
@@ -130,8 +131,8 @@ export default function BannerManager() {
 
     try {
       await Promise.all([
-        updateDoc(doc(db, 'banners', banner.id), { order: other.order }),
-        updateDoc(doc(db, 'banners', other.id), { order: banner.order }),
+        updateDoc(doc(db, bannersCollection, banner.id), { order: other.order }),
+        updateDoc(doc(db, bannersCollection, other.id), { order: banner.order }),
       ])
       setBanners(prev => prev.map(b => {
         if (b.id === banner.id) return { ...b, order: other.order }
@@ -146,7 +147,7 @@ export default function BannerManager() {
   async function handleDelete() {
     if (!deleteTarget) return
     try {
-      await deleteDoc(doc(db, 'banners', deleteTarget.id))
+      await deleteDoc(doc(db, bannersCollection, deleteTarget.id))
       setBanners(prev => prev.filter(b => b.id !== deleteTarget.id))
       toast.success('Banner deleted')
     } catch (err) {

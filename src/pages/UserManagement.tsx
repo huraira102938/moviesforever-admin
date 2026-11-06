@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, getDocs, doc, deleteDoc, updateDoc, deleteField } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { currency, inMarket } from '../lib/market'
 import type { AppUser, PaymentTransaction } from '../lib/types'
 import Badge from '../components/Badge'
 import ConfirmModal from '../components/ConfirmModal'
@@ -26,8 +27,8 @@ export default function UserManagement() {
           getDocs(collection(db, 'users')),
           getDocs(collection(db, 'transactions')),
         ])
-        setUsers(userSnap.docs.map(d => ({ id: d.id, ...d.data() } as AppUser)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()))
-        setTransactions(txnSnap.docs.map(d => ({ id: d.id, ...d.data() } as PaymentTransaction)).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
+        setUsers(userSnap.docs.map(d => ({ id: d.id, ...d.data() } as AppUser)).filter(inMarket).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()))
+        setTransactions(txnSnap.docs.map(d => ({ id: d.id, ...d.data() } as PaymentTransaction)).filter(inMarket).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
       } catch (err) {
         console.error(err)
         toast.error('Failed to load users')
@@ -256,7 +257,7 @@ function FragmentRow({
         </td>
         <td className="px-4 py-2.5">
           {totalPending > 0
-            ? <Badge variant="warning">PKR {totalPending} pending</Badge>
+            ? <Badge variant="warning">{currency} {totalPending} pending</Badge>
             : <span className="text-gray-400">—</span>}
         </td>
         <td className="px-4 py-2.5">
@@ -327,21 +328,21 @@ function DetailPanel({
             <CircleDollarSign className="w-4 h-4 text-amber-500" />
             Total Pending
           </div>
-          <p className="text-2xl font-bold text-amber-600 mt-1">PKR {totalPending}</p>
+          <p className="text-2xl font-bold text-amber-600 mt-1">{currency} {totalPending}</p>
         </div>
         <div className="bg-white rounded-lg border p-4">
           <div className="flex items-center gap-2 text-gray-500 text-sm">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             Total Completed
           </div>
-          <p className="text-2xl font-bold text-emerald-600 mt-1">PKR {totalCompleted}</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{currency} {totalCompleted}</p>
         </div>
         <div className="bg-white rounded-lg border p-4">
           <div className="flex items-center gap-2 text-gray-500 text-sm">
             <Wallet className="w-4 h-4 text-indigo-500" />
             Total Received (via {username})
           </div>
-          <p className="text-2xl font-bold text-indigo-600 mt-1">PKR {totalReceived}</p>
+          <p className="text-2xl font-bold text-indigo-600 mt-1">{currency} {totalReceived}</p>
         </div>
       </div>
 
@@ -368,8 +369,8 @@ function DetailPanel({
                     <p className="font-medium text-gray-900">{txn.clientRealName} <span className="text-xs text-gray-400">({txn.clientUsername})</span></p>
                     <p className="text-xs text-gray-400">{txn.clientPhoneNumber} · {(txn.paymentMethod || '').charAt(0).toUpperCase() + (txn.paymentMethod || '').slice(1)} {txn.paymentNumber || txn.clientJazzCashNumber}</p>
                   </td>
-                  <td className="px-3 py-2.5 text-gray-700 font-medium">PKR {txn.totalReceived}</td>
-                  <td className="px-3 py-2.5 text-gray-700">PKR {txn.referrerPendingAmount}</td>
+                  <td className="px-3 py-2.5 text-gray-700 font-medium">{currency} {txn.totalReceived}</td>
+                  <td className="px-3 py-2.5 text-gray-700">{currency} {txn.referrerPendingAmount}</td>
                   <td className="px-3 py-2.5">
                     {txn.status === 'paid'
                       ? <Badge variant="success">Paid</Badge>

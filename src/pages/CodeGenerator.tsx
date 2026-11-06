@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { inMarket, marketField } from '../lib/market'
 import type { RedemptionCode } from '../lib/types'
 import Button from '../components/Button'
 import Badge from '../components/Badge'
@@ -51,6 +52,7 @@ export default function CodeGenerator() {
       const snap = await getDocs(collection(db, 'codes'))
       const codeList = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as RedemptionCode))
+        .filter(inMarket)
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       setCodes(codeList)
     } catch (err) {
@@ -73,7 +75,7 @@ export default function CodeGenerator() {
       for (let i = 0; i < count; i++) {
         const id = generateCodeString()
         const username = generateUsername()
-        const codeData = { id, username, status: 'unused' as const, createdAt: new Date().toISOString() }
+        const codeData = { ...marketField, id, username, status: 'unused' as const, createdAt: new Date().toISOString() }
         await setDoc(doc(db, 'codes', id), codeData)
         newCodes.push(codeData)
       }

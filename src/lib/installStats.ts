@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
 import { db } from './firebase'
+import { isUae, marketDocId } from './market'
 import { buildInstallReport, type InstallReport, type InstallSnapshot } from './installReport'
 
 /**
@@ -11,6 +12,7 @@ import { buildInstallReport, type InstallReport, type InstallSnapshot } from './
  * Opening the panel only refreshes today's latest total.
  */
 
+const DAILY_COLLECTION = isUae ? 'installDaily-uae' : 'installDaily'
 const TIMEZONE = 'Asia/Karachi'
 const dayFmt = new Intl.DateTimeFormat('en-CA', {
   timeZone: TIMEZONE,
@@ -22,7 +24,7 @@ const dayFmt = new Intl.DateTimeFormat('en-CA', {
 export const todayKey = () => dayFmt.format(new Date())
 
 export async function getInstallTotal(): Promise<number> {
-  const snap = await getDoc(doc(db, 'installs', 'counter'))
+  const snap = await getDoc(doc(db, 'installs', marketDocId('counter')))
   return snap.exists() ? Number(snap.data().installCount) || 0 : 0
 }
 
@@ -30,14 +32,14 @@ export async function getInstallTotal(): Promise<number> {
 export async function recordInstallSnapshot(total: number): Promise<void> {
   const date = todayKey()
   await setDoc(
-    doc(db, 'installDaily', date),
+    doc(db, DAILY_COLLECTION, date),
     { date, endTotal: total, updatedAt: new Date().toISOString() },
     { merge: true },
   )
 }
 
 export async function getInstallReport(liveTotal: number): Promise<InstallReport> {
-  const snap = await getDocs(collection(db, 'installDaily'))
+  const snap = await getDocs(collection(db, DAILY_COLLECTION))
   const snapshots = snap.docs.map(d => ({
     ...d.data(),
     date: d.id,

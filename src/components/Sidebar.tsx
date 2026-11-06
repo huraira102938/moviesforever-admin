@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { isUae, market, switchMarket, type Market } from '../lib/market'
 import {
   LayoutDashboard,
   Film,
@@ -12,6 +13,7 @@ import {
   Share2,
   Bell,
   Flame,
+  Gift,
   FileJson,
   ShieldAlert,
   Download,
@@ -27,6 +29,7 @@ const navItems = [
   { to: '/genres', icon: Tag, label: 'Genres', group: 'Content' },
   { to: '/banners', icon: ImageIcon, label: 'Banners', group: 'Content' },
   { to: '/trending', icon: Flame, label: 'Trending', group: 'Content' },
+  { to: '/free-movies', icon: Gift, label: 'Free Movies', group: 'Content' },
   { to: '/json-data', icon: FileJson, label: 'Movie Data (JSON)', group: 'Content' },
   { to: '/codes', icon: Ticket, label: 'Code Generator', group: 'Users & Codes' },
   { to: '/payments', icon: CreditCard, label: 'Payment Verify', group: 'Users & Codes' },
@@ -48,7 +51,9 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
-  const grouped = navItems.reduce<Record<string, typeof navItems>>((acc, item) => {
+  // App Sharing feeds the Pakistan app and website, and the UAE app has no referrals.
+  const visibleItems = navItems.filter(item => !(isUae ? ['/referrals', '/app-sharing'] : ['/free-movies']).includes(item.to))
+  const grouped = visibleItems.reduce<Record<string, typeof navItems>>((acc, item) => {
     if (!acc[item.group]) acc[item.group] = []
     acc[item.group].push(item)
     return acc
@@ -76,6 +81,18 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
       <div className="hidden lg:block p-4 border-b border-gray-200">
         <h1 className="text-xl font-bold text-indigo-600">MoviesForever</h1>
         <p className="text-xs text-gray-400">Admin Panel</p>
+      </div>
+      <div className="px-4 pt-4">
+        <label htmlFor="market" className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Managing app</label>
+        <select
+          id="market"
+          value={market}
+          onChange={e => switchMarket(e.target.value as Market)}
+          className={`mt-1 w-full h-10 rounded-lg border px-2 text-sm font-semibold ${isUae ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-gray-300 text-gray-800'}`}
+        >
+          <option value="pk">Pakistan</option>
+          <option value="uae">UAE</option>
+        </select>
       </div>
       <nav className="flex-1 px-2 pb-4">
         {groupOrder.map(group => {

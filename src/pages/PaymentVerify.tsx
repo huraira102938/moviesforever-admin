@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { collection, doc, setDoc, updateDoc, query, where, getDocs, getDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { currency, isUae, marketField } from '../lib/market'
 import { REFERRAL_PAYOUT_OPTIONS } from '../lib/types'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -85,6 +86,7 @@ export default function PaymentVerify() {
       }
 
       await setDoc(doc(db, 'users', userId), {
+        ...marketField,
         id: userId,
         username: chosenUsername,
         realName: realName.trim(),
@@ -101,6 +103,7 @@ export default function PaymentVerify() {
       })
 
       await setDoc(doc(db, 'codes', userId), {
+        ...marketField,
         id: userId,
         username: chosenUsername,
         status: 'unused',
@@ -108,6 +111,7 @@ export default function PaymentVerify() {
       })
 
       await setDoc(doc(db, 'transactions', userId), {
+        ...marketField,
         id: userId,
         clientUserId: userId,
         clientUsername: chosenUsername,
@@ -191,16 +195,16 @@ export default function PaymentVerify() {
           <div className="space-y-1.5">
             <Label>Total Payment Received *</Label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">PKR</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currency}</span>
               <Input type="number" min="0" value={totalReceived} onChange={e => setTotalReceived(e.target.value)} placeholder="e.g. 500" className="pl-12" />
             </div>
           </div>
         </div>
 
-        <div className="space-y-1.5">
+        {!isUae && <div className="space-y-1.5">
           <Label>Referral Username (optional)</Label>
           <Input value={referralUsername} onChange={e => setReferralUsername(e.target.value)} placeholder="Enter referrer's username if any" />
-        </div>
+        </div>}
 
         {referralUsername.trim() && (
           <div className="space-y-1.5">

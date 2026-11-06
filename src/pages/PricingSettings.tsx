@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { currency, isUae, marketDocId } from '../lib/market'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Label from '../components/Label'
 import { toast } from 'sonner'
 import { Save } from 'lucide-react'
 
-const SETTINGS_DOC_ID = 'pricing'
+const SETTINGS_DOC_ID = marketDocId('pricing')
 
 export default function PricingSettings() {
   const [standardPrice, setStandardPrice] = useState('')
@@ -41,8 +42,8 @@ export default function PricingSettings() {
 
   async function handleSave() {
     if (!standardPrice || isNaN(Number(standardPrice))) return toast.error('Enter a valid standard price')
-    if (!referralPrice || isNaN(Number(referralPrice))) return toast.error('Enter a valid referral price')
-    if (!referralPayout || isNaN(Number(referralPayout))) return toast.error('Enter a valid referral payout')
+    if (!isUae && (!referralPrice || isNaN(Number(referralPrice)))) return toast.error('Enter a valid referral price')
+    if (!isUae && (!referralPayout || isNaN(Number(referralPayout)))) return toast.error('Enter a valid referral payout')
 
     setSaving(true)
     try {
@@ -81,31 +82,31 @@ export default function PricingSettings() {
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Standard Price (no referral) *</Label>
+            <Label>{isUae ? 'Price *' : 'Standard Price (no referral) *'}</Label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">PKR</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currency}</span>
               <Input type="number" min="0" value={standardPrice} onChange={e => setStandardPrice(e.target.value)} placeholder="e.g. 500" className="pl-12" />
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          {!isUae && <div className="space-y-1.5">
             <Label>Referral Price (when referral is used) *</Label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">PKR</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currency}</span>
               <Input type="number" min="0" value={referralPrice} onChange={e => setReferralPrice(e.target.value)} placeholder="e.g. 400" className="pl-12" />
             </div>
-          </div>
+          </div>}
 
-          <div className="space-y-1.5">
+          {!isUae && <div className="space-y-1.5">
             <Label>Referral Payout (paid to referrer) *</Label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">PKR</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currency}</span>
               <Input type="number" min="0" value={referralPayout} onChange={e => setReferralPayout(e.target.value)} placeholder="e.g. 100" className="pl-12" />
             </div>
-          </div>
+          </div>}
 
           <div className="space-y-1.5">
-            <Label>Note</Label>
+            <Label>{isUae ? 'Message shown in the app' : 'Note'}</Label>
             <textarea
               value={note}
               onChange={e => setNote(e.target.value)}
@@ -126,9 +127,9 @@ export default function PricingSettings() {
       <div className="bg-white rounded-xl border p-6">
         <h2 className="text-lg font-semibold mb-3">Preview</h2>
         <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-          <p>Standard purchase: <strong>PKR {standardPrice || '—'}</strong></p>
-          <p>With referral: <strong>PKR {referralPrice || '—'}</strong></p>
-          <p>Referrer earns: <strong>PKR {referralPayout || '—'}</strong></p>
+          <p>Standard purchase: <strong>{currency} {standardPrice || '—'}</strong></p>
+          {!isUae && <p>With referral: <strong>PKR {referralPrice || '—'}</strong></p>}
+          {!isUae && <p>Referrer earns: <strong>PKR {referralPayout || '—'}</strong></p>}
           {note.trim() && (
             <p className="text-gray-600 pt-2 border-t">Note: {note}</p>
           )}

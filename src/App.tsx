@@ -44,6 +44,7 @@ function App() {
           <Route path="contact-details" element={<ContactDetails />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="trending" element={<Trending />} />
+          <Route path="free-movies" element={<Trending list="free" />} />
           <Route path="force-update" element={<ForceUpdate />} />
           <Route path="json-data" element={<JsonDataManager />} />
           <Route path="installs" element={<Installs />} />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { inMarket, isUae, marketField } from '../lib/market'
 import type { AppUser, PaymentTransaction, AppNotification, NotificationTarget, PushStatus } from '../lib/types'
 import Button from '../components/Button'
 import ConfirmModal from '../components/ConfirmModal'
@@ -8,11 +9,17 @@ import Badge from '../components/Badge'
 import { toast } from 'sonner'
 import { Send, Trash2 } from 'lucide-react'
 
-const TARGET_OPTIONS: { value: NotificationTarget; label: string }[] = [
-  { value: 'free', label: 'Free Users' },
-  { value: 'paid', label: 'Paid Users' },
-  { value: 'paused', label: 'Paused Users' },
-]
+const TARGET_OPTIONS: { value: NotificationTarget; label: string }[] = isUae
+  ? [
+      { value: 'uae_free', label: 'Free Users' },
+      { value: 'uae_paid', label: 'Paid Users' },
+      { value: 'uae_paused', label: 'Paused Users' },
+    ]
+  : [
+      { value: 'free', label: 'Free Users' },
+      { value: 'paid', label: 'Paid Users' },
+      { value: 'paused', label: 'Paused Users' },
+    ]
 
 const PUSH_BADGE: Record<PushStatus, { label: string; variant: 'default' | 'success' | 'warning' | 'destructive' }> = {
   pending: { label: 'push queued', variant: 'warning' },
@@ -40,11 +47,12 @@ export default function Notifications() {
         getDocs(collection(db, 'transactions')),
         getDocs(collection(db, 'notifications')),
       ])
-      setUsers(userSnap.docs.map(d => ({ id: d.id, ...d.data() } as AppUser)))
-      setTransactions(txnSnap.docs.map(d => ({ id: d.id, ...d.data() } as PaymentTransaction)))
+      setUsers(userSnap.docs.map(d => ({ id: d.id, ...d.data() } as AppUser)).filter(inMarket))
+      setTransactions(txnSnap.docs.map(d => ({ id: d.id, ...d.data() } as PaymentTransaction)).filter(inMarket))
       setNotifications(
         notifSnap.docs
           .map(d => ({ id: d.id, ...d.data() } as AppNotification))
+          .filter(inMarket)
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       )
     } catch (err) {
@@ -58,10 +66,12 @@ export default function Notifications() {
   useEffect(() => { loadData() }, [])
 
   const paidUserIds = new Set(transactions.map(t => t.clientUserId))
-  const targetCounts = {
-    free: users.filter(u => !paidUserIds.has(u.id) && !u.paused).length,
-    paid: users.filter(u => paidUserIds.has(u.id) && !u.paused).length,
-    paused: users.filter(u => u.paused).length,
+  const freeCount = users.filter(u => !paidUserIds.has(u.id) && !u.paused).length
+  const paidCount = users.filter(u => paidUserIds.has(u.id) && !u.paused).length
+  const pausedCount = users.filter(u => u.paused).length
+  const targetCounts: Record<NotificationTarget, number> = {
+    free: freeCount, paid: paidCount, paused: pausedCount,
+    uae_free: freeCount, uae_paid: paidCount, uae_paused: pausedCount,
   }
   const totalReach = targets.reduce((s, t) => s + targetCounts[t], 0)
 
@@ -78,7 +88,7 @@ export default function Notifications() {
     try {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
       // pushStatus 'pending' queues a push: the Worker cron sends it to the chosen groups within ~1 minute.
-      const notif: AppNotification = { id, text: trimmed, targets, createdAt: new Date().toISOString(), pushStatus: 'pending' }
+      const notif: AppNotification = { ...marketField, id, text: trimmed, targets, createdAt: new Date().toISOString(), pushStatus: 'pending' }
       await setDoc(doc(db, 'notifications', id), notif)
       setNotifications(prev => [notif, ...prev])
       setText('')
