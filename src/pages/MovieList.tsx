@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { getMovies, updateCachedMovie, removeCachedMovie } from '../lib/moviesCache'
+import { isUae } from '../lib/market'
+import { getUaeFreeIds } from '../lib/uaeFreeList'
 import type { Movie, Category, Genre } from '../lib/types'
 import { SECTIONS } from '../lib/types'
 import Button from '../components/Button'
@@ -24,14 +26,17 @@ export default function MovieList() {
   const [filterSection, setFilterSection] = useState('')
   const [loading, setLoading] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<Movie | null>(null)
+  const [uaeFreeIds, setUaeFreeIds] = useState<Set<string>>(new Set())
 
   async function loadData() {
     try {
-      const [movieList, catSnap, genreSnap] = await Promise.all([
+      const [movieList, catSnap, genreSnap, freeIds] = await Promise.all([
         getMovies(),
         getDocs(collection(db, 'categories')),
         getDocs(collection(db, 'genres')),
+        isUae ? getUaeFreeIds() : Promise.resolve(new Set<string>()),
       ])
+      setUaeFreeIds(freeIds)
       setMovies([...movieList].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
       setCategories(catSnap.docs.map(d => ({ id: d.id, ...d.data() } as Category)))
       setGenres(genreSnap.docs.map(d => ({ id: d.id, ...d.data() } as Genre)))
@@ -44,6 +49,8 @@ export default function MovieList() {
   }
 
   useEffect(() => { loadData() }, [])
+
+  const isFreeHere = (m: Movie) => (isUae ? uaeFreeIds.has(m.id) : m.isFree)
 
   function getCatName(id: string) { return categories.find(c => c.id === id)?.name || id }
   function getGenreName(id: string) { return genres.find(g => g.id === id)?.name || id }
@@ -77,7 +84,7 @@ export default function MovieList() {
   const filtered = movies.filter(m => {
     const matchSearch = !search || m.title.toLowerCase().includes(search.toLowerCase())
     const matchCat = !filterCategory || m.category === filterCategory
-    const matchFree = !filterFree || (filterFree === 'free' ? m.isFree : !m.isFree)
+    const matchFree = !filterFree || (filterFree === 'free' ? isFreeHere(m) : !isFreeHere(m))
     const matchStatus = !filterStatus || (filterStatus === 'live' ? !m.paused : m.paused)
     const matchGenre = !filterGenre || (m.genres || []).includes(filterGenre)
     const matchSection = !filterSection || (m.sections || []).includes(filterSection)
@@ -169,7 +176,7 @@ export default function MovieList() {
                 </td>
                 <td className="px-4 py-3">
                   {movie.paused ? <Badge variant="warning">Paused</Badge> : <Badge variant="success">Live</Badge>}
-                  {movie.isFree && <Badge variant="info" className="ml-1">Free</Badge>}
+                  {isFreeHere(movie) && <Badge variant="info" className="ml-1">Free</Badge>}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-2">

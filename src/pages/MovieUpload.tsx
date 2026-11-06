@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { collection, getDocs, getDoc, doc, addDoc, updateDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { addCachedMovie, updateCachedMovie } from '../lib/moviesCache'
+import { isUae } from '../lib/market'
+import { getUaeFreeIds, setUaeFree } from '../lib/uaeFreeList'
 import { SECTIONS } from '../lib/types'
 import type { Category, Genre } from '../lib/types'
 import FileUploader from '../components/FileUploader'
@@ -67,7 +69,7 @@ export default function MovieUpload() {
           setBadge(m.badge || '')
           setLanguage(m.language || 'Urdu')
           setDubsInput((m.availableDubs || []).join(', '))
-          setIsFree(m.isFree || false)
+          setIsFree(isUae ? (await getUaeFreeIds()).has(editId) : m.isFree || false)
           setSections(m.sections || [])
           setVideoKey(m.videoKey || '')
           setVideoUrl(m.videoUrl || '')
@@ -115,7 +117,8 @@ export default function MovieUpload() {
         badge: badge.trim() || null,
         language: language.trim(),
         availableDubs: dubs,
-        isFree,
+        // isFree is Pakistan's setting: in UAE mode the tick goes to the UAE list below instead.
+        ...(isUae ? {} : { isFree }),
         sections,
         videoKey,
         videoUrl,
@@ -130,11 +133,14 @@ export default function MovieUpload() {
       if (isEditing && editId) {
         await updateDoc(doc(db, 'movies', editId), movieData)
         updateCachedMovie(editId, movieData)
+        if (isUae) await setUaeFree(editId, isFree)
         toast.success('Movie updated successfully')
       } else {
         const createdAt = new Date().toISOString()
-        const newDoc = await addDoc(collection(db, 'movies'), { ...movieData, createdAt })
-        addCachedMovie(newDoc.id, { ...movieData, createdAt })
+        const newMovie = { isFree: false, ...movieData, createdAt }
+        const newDoc = await addDoc(collection(db, 'movies'), newMovie)
+        addCachedMovie(newDoc.id, newMovie)
+        if (isUae) await setUaeFree(newDoc.id, isFree)
         toast.success('Movie uploaded successfully')
       }
       navigate('/movies/list')
@@ -203,7 +209,7 @@ export default function MovieUpload() {
 
         <div className="flex items-center gap-3">
           <input type="checkbox" id="isFree" checked={isFree} onChange={e => setIsFree(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded" />
-          <Label htmlFor="isFree" className="cursor-pointer">Free movie (no payment required to watch)</Label>
+          <Label htmlFor="isFree" className="cursor-pointer">Free in {isUae ? 'the UAE' : 'Pakistan'} only (no payment required to watch)</Label>
         </div>
       </div>
 
