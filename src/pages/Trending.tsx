@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore'
+import { collection, getDocs, addDoc, deleteDoc, doc, writeBatch } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { getMovies } from '../lib/moviesCache'
 import type { TrendingItem, Movie } from '../lib/types'
@@ -9,6 +9,31 @@ import { toast } from 'sonner'
 import { Trash2, ChevronUp, ChevronDown, Flame } from 'lucide-react'
 import ConfirmModal from '../components/ConfirmModal'
 import MovieSearchSelect from '../components/MovieSearchSelect'
+
+/** Row number the admin can overwrite: type a position and press Enter (or click away) to jump there. */
+function PositionInput({ position, onMove }: { position: number; onMove: (position: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null)
+
+  function commit() {
+    if (draft) onMove(Number(draft))
+    setDraft(null)
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      aria-label="Position"
+      title="Type a position and press Enter"
+      value={draft ?? position}
+      onChange={e => setDraft(e.target.value.replace(/\D/g, ''))}
+      onFocus={e => e.target.select()}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      className="text-xs font-mono text-gray-600 w-11 text-center bg-gray-50 border border-gray-200 rounded py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+    />
+  )
+}
 
 export default function Trending() {
   const [items, setItems] = useState<TrendingItem[]>([])
@@ -59,27 +84,25 @@ export default function Trending() {
     }
   }
 
-  async function handleMove(item: TrendingItem, direction: 'up' | 'down') {
-    const sorted = [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    const idx = sorted.findIndex(i => i.id === item.id)
-    if (direction === 'up' && idx === 0) return
-    if (direction === 'down' && idx === sorted.length - 1) return
+  /** Moves a movie to a list index and renumbers the rows in between, so a jump is one save. */
+  async function handleMoveTo(item: TrendingItem, target: number) {
+    const sorted = [...items]
+    const from = sorted.findIndex(i => i.id === item.id)
+    const to = Math.min(Math.max(target, 0), sorted.length - 1)
+    if (from === to) return
+    sorted.splice(to, 0, ...sorted.splice(from, 1))
 
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-    const other = sorted[swapIdx]
+    const batch = writeBatch(db)
+    sorted.forEach((i, position) => {
+      if (i.order !== position) batch.update(doc(db, 'trending', i.id), { order: position })
+    })
+    setItems(sorted.map((i, position) => ({ ...i, order: position })))
 
     try {
-      await Promise.all([
-        updateDoc(doc(db, 'trending', item.id), { order: other.order }),
-        updateDoc(doc(db, 'trending', other.id), { order: item.order }),
-      ])
-      setItems(prev => prev.map(i => {
-        if (i.id === item.id) return { ...i, order: other.order }
-        if (i.id === other.id) return { ...i, order: item.order }
-        return i
-      }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)))
+      await batch.commit()
     } catch (err) {
       toast.error('Failed to reorder')
+      loadData()
     }
   }
 
@@ -110,7 +133,7 @@ export default function Trending() {
       <div className="bg-white rounded-xl border p-6 space-y-5">
         <div className="flex items-center gap-2 text-orange-600 bg-orange-50 rounded-lg p-3">
           <Flame className="w-5 h-5" />
-          <p className="text-sm">Movies appear in this exact order in the trending section.</p>
+          <p className="text-sm">Movies appear in this exact order in the trending section. To move a movie, type its new position in the number box and press Enter.</p>
         </div>
 
         <div className="space-y-1.5">
@@ -139,16 +162,16 @@ export default function Trending() {
               return (
                 <div key={item.id} className="px-4 py-3 flex items-center gap-4">
                   <div className="flex flex-col gap-0.5">
-                    <button onClick={() => handleMove(item, 'up')} disabled={idx === 0}
+                    <button onClick={() => handleMoveTo(item, idx - 1)} disabled={idx === 0}
                       className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-20 disabled:cursor-not-allowed text-gray-400 hover:text-gray-700">
                       <ChevronUp className="w-4 h-4" />
                     </button>
-                    <button onClick={() => handleMove(item, 'down')} disabled={idx === items.length - 1}
+                    <button onClick={() => handleMoveTo(item, idx + 1)} disabled={idx === items.length - 1}
                       className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-20 disabled:cursor-not-allowed text-gray-400 hover:text-gray-700">
                       <ChevronDown className="w-4 h-4" />
                     </button>
                   </div>
-                  <span className="text-xs font-mono text-gray-400 w-6 text-center bg-gray-50 rounded py-1">{idx + 1}</span>
+                  <PositionInput position={idx + 1} onMove={position => handleMoveTo(item, position - 1)} />
                   {movie?.thumbnailUrl && <img src={movie.thumbnailUrl} alt="" className="w-10 h-14 rounded object-cover border" />}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 truncate">{movie?.badge} {movie?.title || item.movieId}</p>
